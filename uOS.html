@@ -200,6 +200,20 @@ button{font-family:inherit;color:inherit;cursor:pointer;border:none;background:n
   padding:14px;display:none;flex-direction:column;gap:12px;max-height:70vh;
 }
 #flyout.open{display:flex}
+/* ---- command palette ---- */
+#palette{position:fixed;inset:0;z-index:960;display:none;align-items:flex-start;justify-content:center;padding:12vh 16px 16px;background:rgba(6,9,14,.55)}
+#palette.open{display:flex}
+#palette .pal-box{width:100%;max-width:620px;background:var(--surface);backdrop-filter:blur(34px) saturate(160%);-webkit-backdrop-filter:blur(34px) saturate(160%);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow);overflow:hidden}
+#palInput{width:100%;border:0;border-bottom:1px solid var(--border);background:none;color:var(--text);font-size:16px;padding:16px 18px;outline:none;font-family:inherit}
+#palInput::placeholder{color:var(--text-dim)}
+#palList{max-height:52vh;overflow:auto;padding:6px}
+.pal-row{display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:9px;font-size:13px;cursor:default}
+.pal-row.on{background:var(--accent-soft);outline:1px solid var(--accent)}
+.pal-row .pi{font-size:19px;line-height:1;width:24px;text-align:center;flex:0 0 24px}
+.pal-row .pt{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pal-row .ps{color:var(--text-dim);font-size:11px;white-space:nowrap}
+.pal-hint{padding:9px 14px;border-top:1px solid var(--border);color:var(--text-dim);font-size:11px;display:flex;gap:12px}
+.pal-empty{padding:16px;color:var(--text-dim);font-size:12.5px}
 .qa{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .qa button{background:var(--field);border:1px solid var(--border);border-radius:6px;padding:11px 8px;display:flex;flex-direction:column;align-items:center;gap:7px;font-size:11px;color:var(--text)}
 .qa button:hover{background:var(--field-hover)}
@@ -811,6 +825,15 @@ body.cursor-lg,body.cursor-lg *{
   <div class="spinner"></div>
   <div id="overlayText">Shutting down…</div>
   <button class="btn" id="overlayBack" style="display:none">Power on</button>
+</div>
+
+<!-- ================= COMMAND PALETTE (Ctrl+K) ================= -->
+<div id="palette">
+  <div class="pal-box">
+    <input id="palInput" placeholder="Search apps, files, settings and commands…" autocomplete="off" spellcheck="false">
+    <div id="palList"></div>
+    <div class="pal-hint"><span>↑ ↓ choose</span><span>Enter run</span><span>Esc close</span><span style="margin-left:auto">Ctrl + K</span></div>
+  </div>
 </div>
 
 <script>
@@ -2545,6 +2568,7 @@ APPS.settings = {
         };
       }
     }
+    APPS.settings.sections = Object.keys(SECTIONS);      // the palette lists these
     render();
   }
 };
@@ -7788,6 +7812,128 @@ setInterval(() => {
   if ($('#overlay').classList.contains('on')) return;
   if (Date.now() - __lastAct > settings.sleepMin * 60000){ __lastAct = Date.now(); lockScreen(); }
 }, 20000);
+
+/* =====================================================================
+   COMMAND PALETTE — Ctrl+K
+   Apps, files, settings sections and quick commands in one box.
+   ===================================================================== */
+const PALETTE_COMMANDS = [
+  { icon: '🌗', label: 'Toggle dark / light theme', run(){ settings.theme = settings.theme === 'dark' ? 'light' : 'dark'; saveSettings(); } },
+  { icon: '🔒', label: 'Lock the screen', run(){ lockScreen(); } },
+  { icon: '🎨', label: 'Cycle the wallpaper', run(){ settings.wallpaper = (settings.wallpaper + 1) % WALLPAPERS.length; settings.customWall = null; saveSettings(); } },
+  { icon: '🌙', label: 'Toggle night light', run(){ settings.nightLight = !settings.nightLight; saveSettings(); } },
+  { icon: '➕', label: 'Zoom in', run(){ zoomBy(10); } },
+  { icon: '➖', label: 'Zoom out', run(){ zoomBy(-10); } },
+  { icon: '🔄', label: 'Reset zoom to 100%', run(){ settings.zoom = 100; saveSettings(); } },
+  { icon: '📌', label: 'Move the taskbar to the top / bottom', run(){ settings.tbPos = settings.tbPos === 'top' ? 'bottom' : 'top'; saveSettings(); } },
+  { icon: '↔️', label: 'Switch taskbar alignment', run(){ settings.tbAlign = settings.tbAlign === 'center' ? 'left' : 'center'; saveSettings(); } },
+  { icon: '🔊', label: 'Mute / unmute sound', run(){ settings.muted = !settings.muted; saveSettings(); applyVolumes(); } },
+  { icon: '📶', label: 'Toggle Wi-Fi (simulated)', run(){ settings.wifi = !settings.wifi; saveSettings(); } },
+  { icon: '🗑️', label: 'Empty the Recycle Bin', run(){ if (!TRASH.length) return toast('Recycle Bin', 'Already empty'); trashEmpty(); toast('Recycle Bin', 'Emptied'); } },
+  { icon: '📋', label: 'Clear clipboard history', run(){ CLIPBOARD = []; store.set('clipboard', CLIPBOARD); toast('Clipboard', 'History cleared'); } },
+  { icon: '🧹', label: 'Auto-arrange desktop icons', run(){ autoArrangeIcons(); toast('Desktop', 'Icons rearranged'); } },
+  { icon: '📝', label: 'New sticky note', run(){ newStickyNote(); } },
+  { icon: '💾', label: 'Export a backup', run(){ exportBackup(); } },
+  { icon: '⬆️', label: 'Check for updates', run(){ checkForUpdate({ manual: true }); } },
+  { icon: '💥', label: 'Reload uOS', run(){ saveSession(true); location.reload(); } }
+];
+
+let palOpen = false, palRows = [], palSel = 0;
+/* used until the Settings app has been mounted once, then it publishes the real list */
+const PALETTE_SETTINGS = ['Personalization','Display','Zoom & scale','Taskbar','Sound','Notifications','Date & time','Windows','Power','Accessibility','Storage','About & backup'];
+function openSettingsSection(name){
+  const ex = [...windows.values()].find(w => w.appId === 'settings');
+  if (ex) closeWin(ex);                       // single:true would otherwise ignore the section
+  openApp('settings', { section: name });
+}
+
+function paletteItems(query){
+  const q = String(query || '').trim().toLowerCase();
+  const all = [];
+  const add = (icon, label, sub, group, run) => all.push({ icon: icon, label: label, sub: sub, group: group, run: run });
+  PALETTE_COMMANDS.forEach(c => add(c.icon, c.label, 'Command', 'cmd', c.run));
+  Object.keys(APPS).forEach(id => {
+    const a = APPS[id];
+    add(a.icon, a.name, 'App', 'app', () => openApp(id));
+  });
+  const settingsNames = (APPS.settings.sections && APPS.settings.sections.length) ? APPS.settings.sections : PALETTE_SETTINGS;
+  settingsNames.forEach(name => add('⚙️', 'Settings · ' + name, 'Settings', 'set', () => openSettingsSection(name)));
+  Object.keys(FS).forEach(path => {
+    const f = FS[path];
+    if (!f || f.type !== 'file') return;
+    add(fileIcon(path, f.type), path.split('/').pop(), path, 'file', () => openPath(path));
+  });
+  if (!q){
+    /* nothing typed: commands and apps are the useful defaults */
+    const fav = all.filter(x => x.group === 'cmd' || x.group === 'app');
+    return fav.slice(0, 12);
+  }
+  const hits = [];
+  all.forEach(it => {
+    const hay = (it.label + ' ' + it.sub).toLowerCase();
+    const at = hay.indexOf(q);
+    if (at < 0) return;
+    let score = at + hay.length / 100;
+    if (it.label.toLowerCase().indexOf(q) === 0) score -= 100;
+    if (it.group === 'cmd') score -= 8;
+    else if (it.group === 'app') score -= 5;
+    else if (it.group === 'set') score -= 2;
+    hits.push({ it: it, score: score });
+  });
+  return hits.sort((a, b) => a.score - b.score).slice(0, 12).map(h => h.it);
+}
+function renderPalette(q){
+  palRows = paletteItems(q);
+  palSel = 0;
+  const list = $('#palList');
+  list.innerHTML = '';
+  if (!palRows.length){
+    list.append(el('div', { class: 'pal-empty' }, 'Nothing matches that.'));
+    return;
+  }
+  palRows.forEach((it, i) => {
+    const row = el('div', { class: 'pal-row' + (i === palSel ? ' on' : ''), 'data-i': i },
+      el('span', { class: 'pi' }, it.icon),
+      el('span', { class: 'pt' }, it.label),
+      el('span', { class: 'ps' }, it.sub));
+    row.addEventListener('mousemove', () => { if (palSel !== i){ palSel = i; paintPaletteSel(); } });
+    row.addEventListener('click', () => runPalette(i));
+    list.append(row);
+  });
+}
+function paintPaletteSel(){
+  $$('#palList .pal-row').forEach((r, i) => r.classList.toggle('on', i === palSel));
+  const on = $('#palList .pal-row.on');
+  if (on && on.scrollIntoView) on.scrollIntoView({ block: 'nearest' });
+}
+function openPalette(){
+  palOpen = true;
+  $('#palette').classList.add('open');
+  const inp = $('#palInput');
+  inp.value = '';
+  renderPalette('');
+  setTimeout(() => inp.focus(), 20);
+}
+function closePalette(){ palOpen = false; $('#palette').classList.remove('open'); }
+function runPalette(i){
+  const it = palRows[i];
+  if (!it) return;
+  closePalette();
+  try { it.run(); } catch(e){ toast('uOS', 'That did not work: ' + (e && e.message || e)); }
+}
+function paletteKey(e){
+  if (!palOpen){
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'k'){ e.preventDefault(); openPalette(); }
+    return;
+  }
+  if (e.key === 'Escape'){ e.preventDefault(); e.stopPropagation(); closePalette(); }
+  else if (e.key === 'ArrowDown'){ e.preventDefault(); palSel = Math.min(palRows.length - 1, palSel + 1); paintPaletteSel(); }
+  else if (e.key === 'ArrowUp'){ e.preventDefault(); palSel = Math.max(0, palSel - 1); paintPaletteSel(); }
+  else if (e.key === 'Enter'){ e.preventDefault(); runPalette(palSel); }
+}
+document.addEventListener('keydown', paletteKey, true);
+$('#palInput').addEventListener('input', e => renderPalette(e.target.value));
+$('#palette').addEventListener('click', e => { if (e.target && e.target.id === 'palette') closePalette(); });
 
 /* global shortcuts */
 document.addEventListener('keydown', e => {
