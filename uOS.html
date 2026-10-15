@@ -557,6 +557,22 @@ body.tb-center #taskItems{flex:0 1 auto}
 body.tb-nolabels .taskitem .tlabel{display:none}
 body.tb-nolabels .taskitem{width:42px;padding:0;justify-content:center}
 body.no-desktop-icons #icons{display:none}
+/* ---- sharp corners (Personalization) ---- */
+body.square .window,body.square #startMenu,body.square #flyout,body.square #taskview,
+body.square .card,body.square .btn,body.square .field,body.square .sm-app,
+body.square .chip,body.square .traybtn,body.square .pin,body.square .taskitem,
+body.square .dicon,body.square .wall,body.square .console,body.square .term,
+body.square .qa button{border-radius:2px!important}
+/* ---- wallpaper dim overlay (Personalization) ---- */
+#desktop::after{
+  content:'';position:absolute;inset:0;background:#000;pointer-events:none;z-index:0;
+  opacity:var(--wall-dim,0);transition:opacity .25s
+}
+/* ---- range sliders (settings) ---- */
+.rng{-webkit-appearance:none;appearance:none;height:4px;border-radius:3px;background:var(--border);outline:none;cursor:pointer}
+.rng::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;border-radius:50%;background:var(--accent);border:2px solid var(--surface-2);cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.45)}
+.rng::-moz-range-thumb{width:15px;height:15px;border:2px solid var(--surface-2);border-radius:50%;background:var(--accent);cursor:pointer}
+.rng:focus-visible{box-shadow:0 0 0 3px var(--accent-soft)}
 body.cursor-lg,body.cursor-lg *{
   cursor:url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='30' height='30' viewBox='0 0 30 30'%3E%3Cpath d='M5 2l17 10.5-7 1.4L18 25l-3.8 1.4L10.6 15 5 20z' fill='white' stroke='black' stroke-width='1.6'/%3E%3C/svg%3E") 5 2,auto
 }
@@ -880,13 +896,15 @@ const WALLPAPERS = [
 ];
 const settings = Object.assign({
   /* personalisation */
-  user: 'User', accent: ACCENTS[0], theme: 'dark', wallpaper: 1,
+  user: 'User', avatar: '', accent: ACCENTS[0], theme: 'dark', wallpaper: 1,
   transparency: 0.72, acrylic: true, customWall: null,
   slideshow: false, slideshowMin: 5,
+  wallFit: 'cover', wallDim: 0, round: true, font: 'system',
   /* display */
   motion: true, nightLight: false, density: 'comfy', cursor: 'default',
+  zoom: 100,
   /* taskbar & shell */
-  tbPos: 'bottom', iconSize: 'md', tbLabels: true, tbAutoHide: false, tbAlign: 'left',
+  tbPos: 'bottom', tbSize: 'md', iconSize: 'md', tbLabels: true, tbAutoHide: false, tbAlign: 'left',
   startRecents: true, desktopIcons: true,
   /* sound & notifications */
   sounds: true, clickSound: true, showToasts: true, dnd: false, notifSound: true,
@@ -899,6 +917,18 @@ const settings = Object.assign({
   /* misc */
   highContrast: false, showTour: true
 }, store.get('settings', {}));
+
+/* interface font choices + taskbar heights, used by Personalization / Zoom */
+const FONTS = {
+  system:  '"Segoe UI Variable","Segoe UI",system-ui,-apple-system,Roboto,Ubuntu,"Helvetica Neue",sans-serif',
+  rounded: 'ui-rounded,"SF Pro Rounded","Varela Round","Segoe UI Variable",system-ui,sans-serif',
+  mono:    'ui-monospace,"Cascadia Code","SF Mono",Consolas,"Courier New",monospace',
+  serif:   'Georgia,"Iowan Old Style","Times New Roman",serif'
+};
+const TBSIZES = { sm: 44, md: 48, lg: 56 };
+/* remembers the interface scale actually applied, so we only re-clamp the
+   desktop icons when the scale really changes */
+let __appliedZoom = null;
 
 function applyTheme(){
   document.documentElement.dataset.theme = settings.theme;
@@ -920,10 +950,29 @@ function applyTheme(){
   b.toggle('tb-nolabels', !settings.tbLabels);
   b.toggle('cursor-lg', settings.cursor === 'large');
   b.toggle('no-desktop-icons', !settings.desktopIcons);
+  b.toggle('square', settings.round === false);
+  /* interface font + taskbar height */
+  document.documentElement.style.setProperty('--font', FONTS[settings.font] || FONTS.system);
+  document.documentElement.style.setProperty('--tb-h', (TBSIZES[settings.tbSize] || TBSIZES.md) + 'px');
+  /* whole-interface scale */
+  const zScale = Math.max(50, Math.min(200, Number(settings.zoom) || 100)) / 100;
+  document.documentElement.style.zoom = zScale === 1 ? '' : String(zScale);
+  if (__appliedZoom !== null && Math.abs(zScale - __appliedZoom) > 1e-6){
+    /* the visible area just changed size — pull any icons back into view */
+    setTimeout(() => { try { clampIconsToScreen(); } catch(e){} }, 80);
+  }
+  __appliedZoom = zScale;
   const desk = $('#desktop');
-  if (desk) desk.style.backgroundImage = settings.customWall || WALLPAPERS[settings.wallpaper] || WALLPAPERS[0];
+  if (desk) {
+    desk.style.backgroundImage = settings.customWall || WALLPAPERS[settings.wallpaper] || WALLPAPERS[0];
+    const fit = settings.wallFit || 'cover';
+    desk.style.backgroundSize   = fit === 'stretch' ? '100% 100%' : fit === 'tile' ? 'auto' : fit === 'fit' ? 'contain' : 'cover';
+    desk.style.backgroundRepeat = fit === 'tile' ? 'repeat' : 'no-repeat';
+    desk.style.setProperty('--wall-dim', String(Math.max(0, Math.min(80, Number(settings.wallDim) || 0)) / 100));
+  }
   const u = $('#smUser'); if (u) u.textContent = settings.user;
-  const av = $('#smAvatar'); if (av) av.textContent = (settings.user[0] || 'U').toUpperCase();
+  const ava = (settings.avatar || '').trim() || (settings.user[0] || 'U').toUpperCase();
+  $$('#smAvatar').forEach(a => { a.textContent = ava; });
   startSlideshow();
 }
 /* wallpaper slideshow */
@@ -945,6 +994,14 @@ function hexA(hex, a){
   return 'rgba(' + ((n>>16)&255) + ',' + ((n>>8)&255) + ',' + (n&255) + ',' + a + ')';
 }
 function saveSettings(){ store.set('settings', settings); applyTheme(); }
+/* Ctrl + Alt + = / − scale the whole interface */
+function zoomBy(delta){
+  const next = Math.max(60, Math.min(160, (Number(settings.zoom) || 100) + delta));
+  if (next === (Number(settings.zoom) || 100)) return;
+  settings.zoom = next;
+  saveSettings();
+  toast('Zoom & scale', 'Interface scale ' + next + '%');
+}
 
 /* --------------------------- virtual file system -------------------- */
 function makeFS(){
@@ -997,6 +1054,23 @@ function fsDelete(p){
 const fileIcon = (n, t) => t === 'dir' ? '📁' : /\.(png|jpe?g|gif|webp|svg)$/i.test(n) ? '🖼️'
   : /\.(mp3|wav|ogg)$/i.test(n) ? '🎵' : /\.(js|json|html|css)$/i.test(n) ? '📜' : '📄';
 
+/* ---- interface scale helpers -------------------------------------------
+   The Personalization "UI scale" multiplies every measured rectangle and the
+   reported innerWidth/innerHeight, but windows, icons, widgets and menus are
+   all positioned in unscaled CSS pixels. These helpers convert a measurement
+   back into that space so nothing jumps or lands off-screen at zoom ≠ 100%. */
+function zoomScale(){
+  const z = parseFloat(document.documentElement.style.zoom);
+  return z > 0 ? z : 1;
+}
+function VW(){ return innerWidth / zoomScale(); }
+function VH(){ return innerHeight / zoomScale(); }
+function cssRect(el){
+  const r = el.getBoundingClientRect(), z = zoomScale();
+  return { left: r.left / z, top: r.top / z, width: r.width / z, height: r.height / z,
+           right: r.right / z, bottom: r.bottom / z };
+}
+
 /* ------------------------------ window manager ---------------------- */
 const windows = new Map();      // id -> win
 let activeWin = null, zTop = 100;
@@ -1009,8 +1083,8 @@ function createWindow(appId, app, args = {}){
   };
 
   const w = app.w || 720, h = app.h || 500;
-  const x = clamp(Math.round((innerWidth - w) / 2) + ((windows.size % 5) - 2) * 26, 8, Math.max(8, innerWidth - w - 8));
-  const y = clamp(Math.round((innerHeight - TB() - h) / 2) + ((windows.size % 5) - 2) * 22, 6, Math.max(6, innerHeight - TB() - h - 6));
+  const x = clamp(Math.round((VW() - w) / 2) + ((windows.size % 5) - 2) * 26, 8, Math.max(8, VW() - w - 8));
+  const y = clamp(Math.round((VH() - TB() - h) / 2) + ((windows.size % 5) - 2) * 22, 6, Math.max(6, VH() - TB() - h - 6));
 
   const node = el('div', { class: 'window' });
   node.style.cssText = `left:${x}px;top:${y}px;width:${w}px;height:${h}px;z-index:${++zTop}`;
@@ -1116,29 +1190,29 @@ function makeDraggable(win){
     focusWin(win);
     if (win.maximized){
       // un-maximize: keep window under cursor proportionally
-      const r = win.el.getBoundingClientRect();
+      const r = cssRect(win.el);
       const relX = (e.clientX - r.left) / r.width;
       toggleMax(win);
-      const nr = win.el.getBoundingClientRect();
-      win.el.style.left = clamp(e.clientX - nr.width * relX, -nr.width + 100, innerWidth - 80) + 'px';
+      const nr = cssRect(win.el);
+      win.el.style.left = clamp(e.clientX - nr.width * relX, -nr.width + 100, VW() - 80) + 'px';
       win.el.style.top = Math.max(0, e.clientY - 19) + 'px';
     }
-    const r = win.el.getBoundingClientRect();
+    const r = cssRect(win.el);
     const ox = e.clientX - r.left, oy = e.clientY - r.top;
     try { bar.setPointerCapture(e.pointerId); } catch(err){}
     const move = ev => {
       let nx = ev.clientX - ox, ny = ev.clientY - oy;
-      nx = clamp(nx, -r.width + 90, innerWidth - 70);
-      ny = clamp(ny, 0, innerHeight - 90);
+      nx = clamp(nx, -r.width + 90, VW() - 70);
+      ny = clamp(ny, 0, VH() - 90);
       win.el.style.left = nx + 'px';
       win.el.style.top = ny + 'px';
       // edge snap hint
       const hint = $('#snapHint');
       snap = null;
       if (settings.snap){
-        if (ev.clientY <= 4) snap = { x:0, y:0, w:innerWidth, h:innerHeight - TB() };
-        else if (ev.clientX <= 4) snap = { x:0, y:0, w:innerWidth / 2, h:innerHeight - TB() };
-        else if (ev.clientX >= innerWidth - 4) snap = { x:innerWidth / 2, y:0, w:innerWidth / 2, h:innerHeight - TB() };
+        if (ev.clientY <= 4) snap = { x:0, y:0, w:VW(), h:VH() - TB() };
+        else if (ev.clientX <= 4) snap = { x:0, y:0, w:VW() / 2, h:VH() - TB() };
+        else if (ev.clientX >= VW() - 4) snap = { x:VW() / 2, y:0, w:VW() / 2, h:VH() - TB() };
       }
       if (snap){
         hint.style.display = 'block';
@@ -1152,7 +1226,7 @@ function makeDraggable(win){
       if (snap){
         win.prevRect = { left: r.left, top: r.top, width: r.width, height: r.height };
         win.el.style.cssText = `left:${snap.x}px;top:${snap.y}px;width:${snap.w}px;height:${snap.h}px;z-index:${win.el.style.zIndex}`;
-        win.maximized = snap.w === innerWidth && snap.h === innerHeight - TB();
+        win.maximized = snap.w === VW() && snap.h === VH() - TB();
         win.el.classList.toggle('maximized', win.maximized);
         if (win.onResize) win.onResize();
       }
@@ -1168,13 +1242,13 @@ function makeResizable(win){
       if (win.maximized) return;
       focusWin(win);
       const dir = handle.dataset.dir;
-      const r = win.el.getBoundingClientRect();
+      const r = cssRect(win.el);
       try { handle.setPointerCapture(e.pointerId); } catch(err){}
       const move = ev => {
         let { clientX: cx, clientY: cy } = ev;
         let L = r.left, T = r.top, W = r.width, H = r.height;
-        if (dir.includes('e')) W = clamp(cx - r.left, 260, innerWidth - r.left);
-        if (dir.includes('s')) H = clamp(cy - r.top, 150, innerHeight - TB() - r.top);
+        if (dir.includes('e')) W = clamp(cx - r.left, 260, VW() - r.left);
+        if (dir.includes('s')) H = clamp(cy - r.top, 150, VH() - TB() - r.top);
         if (dir.includes('w')){ W = clamp(r.right - cx, 260, r.right); L = r.right - W; }
         if (dir.includes('n')){ H = clamp(r.bottom - cy, 150, r.bottom); T = r.bottom - H; }
         Object.assign(win.el.style, { left:L + 'px', top:T + 'px', width:W + 'px', height:H + 'px' });
@@ -1658,6 +1732,17 @@ APPS.settings = {
       return el('span', { style: 'display:flex;gap:8px;align-items:center' }, i, unit ? el('span', { class: 'muted', style: 'font-size:12px' }, unit) : null);
     };
     const btnRow = (...btns) => el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;align-items:center' }, ...btns);
+    const slider = (key, min, max, step, fmt) => {
+      const wrap = el('span', { style: 'display:flex;gap:10px;align-items:center;min-width:210px;flex:1' });
+      const i = el('input', { class: 'rng', type: 'range', min: String(min), max: String(max), step: String(step) });
+      i.style.flex = '1';
+      const out = el('span', { class: 'muted', style: 'font-size:12px;min-width:48px;text-align:right' });
+      i.value = settings[key];
+      out.textContent = fmt ? fmt(+settings[key]) : String(settings[key]);
+      i.oninput = () => { settings[key] = +i.value; out.textContent = fmt ? fmt(+i.value) : String(i.value); saveSettings(); };
+      wrap.append(i, out);
+      return wrap;
+    };
 
     function wallGrid(){
       const wg = el('div', { class: 'wallgrid' });
@@ -1713,6 +1798,9 @@ APPS.settings = {
         const person = el('input', { class: 'field', value: settings.user });
         person.style.maxWidth = '200px';
         person.oninput = () => { settings.user = person.value || 'User'; applyTheme(); store.set('settings', settings); };
+        const avatarInput = el('input', { class: 'field', value: settings.avatar || '', placeholder: '🙂' });
+        avatarInput.style.maxWidth = '90px';
+        avatarInput.oninput = () => { settings.avatar = Array.from(avatarInput.value).slice(0, 2).join(''); applyTheme(); store.set('settings', settings); };
         return [
           head('Theme presets'),
           card(presetRow),
@@ -1729,8 +1817,23 @@ APPS.settings = {
             btnRow(wallUrl, el('button', { class: 'btn', onclick: () => { if (!wallUrl.value.trim()) return; settings.customWall = 'url("' + wallUrl.value.trim() + '")'; saveSettings(); render(); } }, 'Use URL'), el('label', { class: 'btn' }, 'Upload image…', fileInput),
               el('button', { class: 'btn', onclick: () => { settings.customWall = null; saveSettings(); render(); } }, 'Clear custom'))
           ),
+          head('Wallpaper behaviour'),
+          card(
+            row('Fit', chips('wallFit', [['cover', 'Fill'], ['fit', 'Fit'], ['stretch', 'Stretch'], ['tile', 'Tile']])),
+            row('Dim the wallpaper', slider('wallDim', 0, 80, 5, v => v + '%'), 'Darkens the background so icons stand out')
+          ),
+          head('Look & feel'),
+          card(
+            row('Window corners', chips('round', [[true, 'Rounded'], [false, 'Sharp']]), 'Rounded like Windows 11, or crisp square corners'),
+            row('Interface font', chips('font', [['system', 'System'], ['rounded', 'Rounded'], ['mono', 'Mono'], ['serif', 'Serif']]), 'Applies to menus, windows and buttons'),
+            row('Window transparency', slider('transparency', 0.45, 1, 0.01, v => Math.round(v * 100) + '%'), 'Lower is more solid, higher shows more behind'),
+            row('Acrylic blur', sw('acrylic'), 'Frosted glass behind windows and the taskbar')
+          ),
           head('Profile'),
-          card(row('User name', person, 'Shown on the Start menu and lock screen'))
+          card(
+            row('User name', person, 'Shown on the Start menu and lock screen'),
+            row('Avatar', avatarInput, 'Any emoji — blank uses your initial')
+          )
         ];
       },
 
@@ -1750,6 +1853,28 @@ APPS.settings = {
         )
       ],
 
+      'Zoom & scale': () => [
+        head('Interface scale'),
+        card(
+          row('UI scale', chips('zoom', [[75, '75%'], [90, '90%'], [100, '100%'], [110, '110%'], [125, '125%'], [150, '150%']]), 'Scales every window, menu and font'),
+          row('Fine tune', slider('zoom', 60, 160, 5, v => v + '%')),
+          row('Reset', btnRow(el('button', { class: 'btn', onclick: () => { settings.zoom = 100; saveSettings(); render(); toast('Zoom & scale', 'Scale reset to 100%'); } }, 'Reset to 100%')))
+        ),
+        head('Taskbar & icons'),
+        card(
+          row('Taskbar height', chips('tbSize', [['sm', 'Compact'], ['md', 'Default'], ['lg', 'Large']])),
+          row('Desktop icon size', chips('iconSize', [['sm', 'Small'], ['md', 'Medium'], ['lg', 'Large']])),
+          row('Cursor size', chips('cursor', [['default', 'Default'], ['large', 'Large']]))
+        ),
+        head('Preview'),
+        card(
+          row('Viewport at this scale', el('span', { class: 'muted' }, Math.round(VW()) + ' × ' + Math.round(VH()) + ' px')),
+          row('Physical screen', el('span', { class: 'muted' }, Math.round(innerWidth) + ' × ' + Math.round(innerHeight) + ' px')),
+          row('Shortcut', el('span', { class: 'mono muted' }, 'Ctrl + Alt + =  /  Ctrl + Alt + −')),
+          note('This changes how large uOS draws itself — your real display settings are not touched.')
+        )
+      ],
+
       Taskbar: () => [
         head('Position & size'),
         card(
@@ -1761,7 +1886,7 @@ APPS.settings = {
         card(
           row('Show window labels', sw('tbLabels'), 'Show the app name on running buttons'),
           row('Pinned apps', btnRow(
-            el('button', { class: 'btn', onclick: () => { store.set('pinned', ['browser', 'files']); pinnedList = ['browser', 'files']; rebuildTaskbar(); toast('Taskbar', 'Pins reset'); } }, 'Reset to Browser + Files'),
+            el('button', { class: 'btn', onclick: () => { pinnedList = DEFAULT_PINS.slice(); store.set('pinned', pinnedList); rebuildTaskbar(); toast('Taskbar', 'Pins reset to defaults'); } }, 'Reset to defaults'),
             el('button', { class: 'btn', onclick: () => { pinnedList = []; store.set('pinned', []); rebuildTaskbar(); toast('Taskbar', 'All pins removed'); } }, 'Unpin everything')
           ))
         ),
@@ -1914,7 +2039,10 @@ APPS.settings = {
             row('Terminal', el('span', { class: 'mono muted' }, 'Ctrl + Alt + T')),
             row('AI Assistant', el('span', { class: 'mono muted' }, 'Ctrl + Alt + A')),
             row('Settings', el('span', { class: 'mono muted' }, 'Ctrl + Alt + S')),
-            row('Lock screen', el('span', { class: 'mono muted' }, 'Ctrl + Alt + L'))
+            row('Lock screen', el('span', { class: 'mono muted' }, 'Ctrl + Alt + L')),
+            row('ClassroomMaxxing', el('span', { class: 'mono muted' }, 'Ctrl + Alt + G')),
+            row('Zoom in / out', el('span', { class: 'mono muted' }, 'Ctrl + Alt + =  /  −')),
+            row('Reset zoom', el('span', { class: 'mono muted' }, 'Ctrl + Alt + 0'))
           ),
           head('Backup'),
           card(
@@ -2660,13 +2788,13 @@ function renderNotes(){
     el2.append(bar, ta);
     bar.addEventListener('pointerdown', e => {
       if (e.target.closest('.sn-btn')) return;
-      const r = el2.getBoundingClientRect();
+      const r = cssRect(el2);
       const ox = e.clientX - r.left, oy = e.clientY - r.top;
       const sx = n.x, sy = n.y;
       try { bar.setPointerCapture(e.pointerId); } catch(err){}
       const move = ev => {
-        n.x = clamp(ev.clientX - ox, 0, innerWidth - 60);
-        n.y = clamp(ev.clientY - oy, 0, innerHeight - 90);
+        n.x = clamp(ev.clientX - ox, 0, VW() - 60);
+        n.y = clamp(ev.clientY - oy, 0, VH() - 90);
         el2.style.left = n.x + 'px'; el2.style.top = n.y + 'px';
       };
       const up = () => {
@@ -3278,7 +3406,7 @@ APPS.run = {
           <input class="field mono" id="runIn" placeholder="app name or file path" autocomplete="off" spellcheck="false">
           <button class="btn primary" id="runGo">OK</button>
         </div>
-        <div class="muted" style="font-size:11.5px;line-height:1.6">Try: files · browser · arcade · terminal · calc · settings · ai · trash · clipboard · run — or a path like <span class="mono">Documents/notes.txt</span></div>
+        <div class="muted" style="font-size:11.5px;line-height:1.6">Try: files · browser · classmax · terminal · calc · settings · ai · trash · clipboard · run — or a path like <span class="mono">Documents/notes.txt</span></div>
         <div class="muted" id="runHist" style="font-size:11.5px;font-family:var(--mono)"></div>
       </div>`;
     const inp = $('#runIn', body);
@@ -3462,7 +3590,7 @@ function renderWidgets(){
     $('.widget-x', bar).onclick = e => { e.stopPropagation(); removeWidget(wd.id); };
     bar.addEventListener('pointerdown', e => {
       if (e.target.closest('.widget-x')) return;
-      const r = $('#desktop').getBoundingClientRect();
+      const r = cssRect($('#desktop'));
       const sx = e.clientX, sy = e.clientY, ox = wd.x, oy = wd.y, w0 = card.offsetWidth, h0 = card.offsetHeight;
       try { bar.setPointerCapture(e.pointerId); } catch(err){}
       const move = ev => {
@@ -3702,7 +3830,19 @@ function restoreDesktopIcons(){
 }
 
 /* --------------------------- taskbar pinning ------------------------ */
-let pinnedList = store.get('pinned', ['browser', 'files']);
+const DEFAULT_PINS = ['browser', 'files', 'terminal', 'ai'];
+let pinnedList = store.get('pinned', null);
+/* one-time upgrade: anyone still on the old "Browser + Files" default picks up
+   the new default instead; an already-customised set is left alone. */
+if (!Array.isArray(pinnedList)) {
+  pinnedList = DEFAULT_PINS.slice();
+} else if (!store.get('pinsUpgraded', false)) {
+  if (pinnedList.length === 2 && pinnedList[0] === 'browser' && pinnedList[1] === 'files') {
+    pinnedList = DEFAULT_PINS.slice();
+    store.set('pinned', pinnedList);
+  }
+  store.set('pinsUpgraded', true);
+}
 function isPinned(id){ return pinnedList.includes(id); }
 function pinApp(id){ if (!isPinned(id)){ pinnedList = pinnedList.concat(id); store.set('pinned', pinnedList); rebuildTaskbar(); } }
 function unpinApp(id){ pinnedList = pinnedList.filter(x => x !== id); store.set('pinned', pinnedList); rebuildTaskbar(); }
@@ -3796,7 +3936,7 @@ function snapAxis(v, cell, pad, max){
 }
 /* pull every icon back on-screen (used after the window is resized) */
 function clampIconsToScreen(){
-  const rect = $('#desktop').getBoundingClientRect();
+  const rect = cssRect($('#desktop'));
   const save = store.get('iconPos', {}) || {};
   $$('.dicon').forEach(n => {
     const iw = n.offsetWidth || 86, ih = n.offsetHeight || 90;
@@ -3810,7 +3950,7 @@ function clampIconsToScreen(){
 function autoArrangeIcons(){ store.set('iconPos', {}); renderDesktopIcons(); }
 
 /* ---------------- stop desktop things overlapping each other -------- */
-function deskArea(){ return $('#desktop').getBoundingClientRect(); }
+function deskArea(){ return cssRect($('#desktop')); }
 function objectRects(exclude, noIcons){
   const d = deskArea();
   const out = [];
@@ -3818,7 +3958,7 @@ function objectRects(exclude, noIcons){
     if (n === exclude) return;
     if (exclude && exclude.contains && exclude.contains(n)) return;
     if (!n.isConnected) return;
-    const r = n.getBoundingClientRect();
+    const r = cssRect(n);
     if (!r.width || !r.height) return;
     out.push({ x: r.left - d.left, y: r.top - d.top, w: r.width, h: r.height });
   });
@@ -3886,7 +4026,7 @@ function placeNoOverlap(node, x, y, w, h, isIcon){
 function renderDesktopIcons(){
   const host = $('#icons');
   host.innerHTML = '';
-  const rect = $('#desktop').getBoundingClientRect();
+  const rect = cssRect($('#desktop'));
   measureIconCell();
   const saved = store.get('iconPos', {}) || {};
   desktopIcons().forEach((id, i) => {
@@ -3940,7 +4080,7 @@ function renderDesktopIcons(){
     /* ---- drag to move (moves the whole selection if several are selected) ---- */
     n.addEventListener('pointerdown', e => {
       if (e.button !== 0) return;
-      const drect = $('#desktop').getBoundingClientRect();
+      const drect = cssRect($('#desktop'));
       const sel = $$('.dicon.sel');
       const group = (n.classList.contains('sel') && sel.length > 1) ? sel : [n];
       const start = group.map(g => ({ node: g, x: parseFloat(g.style.left) || 0, y: parseFloat(g.style.top) || 0, w: g.offsetWidth || 92, h: g.offsetHeight || 96 }));
@@ -3989,7 +4129,7 @@ function renderDesktopIcons(){
     const cur = iconCellOf(node);
     const key = cur.cx + ',' + cur.cy;
     if (!usedCells.has(key)){ usedCells.add(key); return; }
-    const spot = freeIconSpot(cur.cx, cur.cy, w, h, objectRects(node), $('#desktop').getBoundingClientRect());
+    const spot = freeIconSpot(cur.cx, cur.cy, w, h, objectRects(node), cssRect($('#desktop')));
     if (spot){
       node.style.left = spot.x + 'px';
       node.style.top = spot.y + 'px';
@@ -4035,7 +4175,7 @@ function renderStartMenu(filter = ''){
 }
 function renderRecents(){
   const host = $('#smRecents');
-  const recents = store.get('recents', ['arcade','browser','terminal']);
+  const recents = store.get('recents', ['browser','files','terminal']);
   host.innerHTML = '';
   recents.slice(0, 4).forEach(id => {
     if (!APPS[id]) return;
@@ -4065,9 +4205,9 @@ function showContext(x, y, items){
     m.append(b);
   });
   m.classList.add('open');
-  const r = m.getBoundingClientRect();
-  m.style.left = Math.min(x, innerWidth - r.width - 8) + 'px';
-  m.style.top = Math.min(y, innerHeight - r.height - 8) + 'px';
+  const r = cssRect(m);
+  m.style.left = Math.min(x, VW() - r.width - 8) + 'px';
+  m.style.top = Math.min(y, VH() - r.height - 8) + 'px';
 }
 function hideContext(){ $('#ctxMenu').classList.remove('open'); }
 
@@ -4147,7 +4287,7 @@ $('#desktop').addEventListener('pointerdown', e => {
   const additive = e.ctrlKey || e.metaKey || e.shiftKey;
   const keep = additive ? $$('.dicon.sel') : [];
   if (!additive) $$('.dicon').forEach(x => x.classList.remove('sel'));
-  const rect = $('#desktop').getBoundingClientRect();
+  const rect = cssRect($('#desktop'));
   const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
   selbox.style.display = 'block';
   Object.assign(selbox.style, { left: sx + 'px', top: sy + 'px', width: '0px', height: '0px' });
@@ -4156,7 +4296,7 @@ $('#desktop').addEventListener('pointerdown', e => {
     const x = Math.min(sx, cx), y = Math.min(sy, cy), w = Math.abs(cx - sx), h = Math.abs(cy - sy);
     Object.assign(selbox.style, { left: x + 'px', top: y + 'px', width: w + 'px', height: h + 'px' });
     $$('.dicon').forEach(ic => {
-      const b = ic.getBoundingClientRect();
+      const b = cssRect(ic);
       const ix = b.left - rect.left, iy = b.top - rect.top;
       const hit = !(ix + b.width < x || ix > x + w || iy + b.height < y || iy > y + h);
       ic.classList.toggle('sel', hit || keep.includes(ic));
@@ -4393,12 +4533,15 @@ setInterval(() => {
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape'){ toggleStart(false); hideContext(); }
   if (e.ctrlKey && e.altKey && e.key.toLowerCase() === 't'){ e.preventDefault(); openApp('terminal'); }
-  if (e.ctrlKey && e.altKey && e.key.toLowerCase() === 'g'){ e.preventDefault(); openApp('arcade'); }
+  if (e.ctrlKey && e.altKey && e.key.toLowerCase() === 'g'){ e.preventDefault(); openApp('classmax'); }
   if (e.ctrlKey && e.altKey && e.key.toLowerCase() === 'r'){ e.preventDefault(); openApp('run'); }
   if (e.ctrlKey && e.altKey && e.key.toLowerCase() === 's'){ e.preventDefault(); openApp('settings'); }
   if (e.ctrlKey && e.altKey && e.key.toLowerCase() === 'l'){ e.preventDefault(); lockScreen(); }
   if (e.ctrlKey && e.altKey && e.key.toLowerCase() === 'c'){ e.preventDefault(); openApp('clipboard'); }
   if (e.ctrlKey && e.altKey && e.key.toLowerCase() === 'a'){ e.preventDefault(); openApp('ai'); }
+  if (e.ctrlKey && e.altKey && (e.key === '=' || e.key === '+')){ e.preventDefault(); zoomBy(10); }
+  if (e.ctrlKey && e.altKey && (e.key === '-' || e.key === '_')){ e.preventDefault(); zoomBy(-10); }
+  if (e.ctrlKey && e.altKey && (e.key === '0' || e.key === ')')){ e.preventDefault(); settings.zoom = 100; saveSettings(); toast('Zoom & scale', 'Interface scale 100%'); }
 });
 
 /* trackpad wheel over desktop = nothing; keep scroll inside windows */
@@ -4562,12 +4705,12 @@ function tourTargetRect(step){
   if (step.multi){
     let l = Infinity, t = Infinity, r = -Infinity, b = -Infinity;
     nodes.forEach(function(n){
-      const q = n.getBoundingClientRect();
+      const q = cssRect(n);
       l = Math.min(l, q.left); t = Math.min(t, q.top); r = Math.max(r, q.right); b = Math.max(b, q.bottom);
     });
     return { left: l, top: t, right: r, bottom: b, width: r - l, height: b - t };
   }
-  return nodes[0].getBoundingClientRect();
+  return cssRect(nodes[0]);
 }
 function renderTour(){
   const T = tourEls(), step = TOUR_STEPS[__tourStep];
@@ -4578,8 +4721,8 @@ function renderTour(){
     T.spot.style.display = 'block';
     T.spot.style.left = l + 'px';
     T.spot.style.top = t + 'px';
-    T.spot.style.width = Math.min(innerWidth - l, rect.width + pad * 2) + 'px';
-    T.spot.style.height = Math.min(innerHeight - t, rect.height + pad * 2) + 'px';
+    T.spot.style.width = Math.min(VW() - l, rect.width + pad * 2) + 'px';
+    T.spot.style.height = Math.min(VH() - t, rect.height + pad * 2) + 'px';
   } else {
     T.spot.style.display = 'block';
     T.spot.style.left = '50%'; T.spot.style.top = '46%';
@@ -4608,14 +4751,14 @@ function renderTour(){
   // position the card next to the spotlight
   requestAnimationFrame(function(){
     const cw = T.card.offsetWidth, ch = T.card.offsetHeight;
-    let left = innerWidth / 2 - cw / 2, top = innerHeight / 2 - ch / 2;
+    let left = VW() / 2 - cw / 2, top = VH() / 2 - ch / 2;
     if (rect && rect.width){
       const cx = rect.left + rect.width / 2;
       left = cx - cw / 2;
-      top = (rect.bottom + ch + 24 < innerHeight) ? rect.bottom + 14 : Math.max(12, rect.top - ch - 14);
+      top = (rect.bottom + ch + 24 < VH()) ? rect.bottom + 14 : Math.max(12, rect.top - ch - 14);
     }
-    T.card.style.left = Math.max(12, Math.min(left, innerWidth - cw - 12)) + 'px';
-    T.card.style.top = Math.max(12, Math.min(top, innerHeight - ch - 12)) + 'px';
+    T.card.style.left = Math.max(12, Math.min(left, VW() - cw - 12)) + 'px';
+    T.card.style.top = Math.max(12, Math.min(top, VH() - ch - 12)) + 'px';
   });
 }
 function startTour(from){
