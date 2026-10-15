@@ -1387,22 +1387,89 @@ function cssRect(el){
            right: r.right / z, bottom: r.bottom / z };
 }
 
+/* ---------------- window memory + session restore -------------------
+   Each app remembers where and how big its window was, and the set of
+   open windows is saved so a reload can bring your session back.       */
+let winMem = store.get('winMem', {}) || {};
+/* geometry from the style where possible: an in-flight CSS animation can
+   offset getBoundingClientRect, and style values are what we set anyway */
+function winRect(win){
+  if (win.maximized && win.prevRect) return { x: Math.round(win.prevRect.left), y: Math.round(win.prevRect.top), w: Math.round(win.prevRect.width), h: Math.round(win.prevRect.height) };
+  const s = win.el.style;
+  const x = parseFloat(s.left), y = parseFloat(s.top), w = parseFloat(s.width), h = parseFloat(s.height);
+  if (isFinite(x) && isFinite(y) && isFinite(w) && isFinite(h)) return { x: Math.round(x), y: Math.round(y), w: Math.round(w), h: Math.round(h) };
+  const r = cssRect(win.el);
+  return { x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height) };
+}
+function rememberWin(win){
+  if (!win || !win.el || !win.el.isConnected) return;
+  winMem[win.appId] = winRect(win);
+  store.set('winMem', winMem);
+  if (typeof saveSession === 'function') saveSession();
+}
+function smallArgs(args){
+  if (!args) return null;
+  const out = {};
+  for (const k of Object.keys(args)){
+    if (k.indexOf('__') === 0 || k === 'text') continue;     // never persist big payloads
+    out[k] = args[k];
+  }
+  try { return JSON.stringify(out).length > 400 ? null : out; } catch(e){ return null; }
+}
+let __sessT = null;
+function saveSession(now){
+  const write = () => {
+    const list = [];
+    windows.forEach(w => {
+      if (!w.el || !w.el.isConnected) return;
+      list.push({ appId: w.appId, args: smallArgs(w.args), max: !!w.maximized, rect: winRect(w) });
+    });
+    store.set('session', list);
+  };
+  clearTimeout(__sessT);
+  if (now){ write(); return; }
+  __sessT = setTimeout(write, 350);          // debounce bursts of changes
+}
+/* a reload or a closed tab should still remember the session */
+window.addEventListener('beforeunload', () => { try { saveSession(true); } catch(e){} });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden'){ try { saveSession(true); } catch(e){} } });
+function restoreSession(){
+  if (!settings.restoreSession) return;
+  const sess = store.get('session', null);
+  if (!sess || !sess.length) return;
+  sess.forEach(s => {
+    if (!s || !APPS[s.appId]) return;
+    try {
+      const box = openApp(s.appId, Object.assign({}, s.args || {}, { __rect: s.rect }));
+      if (box && s.max && !box.maximized) toggleMax(box);
+    } catch(e){}
+  });
+}
+
 /* ------------------------------ window manager ---------------------- */
 const windows = new Map();      // id -> win
 let activeWin = null, zTop = 100;
 
 function createWindow(appId, app, args = {}){
   const id = uid();
+  /* remembered geometry: an explicit restore wins, else the app's last size */
+  const remembered = args.__rect || winMem[appId] || null;
   const win = {
-    id, appId, app, el: null, body: null, taskEl: null, startedAt: Date.now(),
+    id, appId, app, args: args, el: null, body: null, taskEl: null, startedAt: Date.now(),
     cleanup: null, minimized: false, maximized: false, prevRect: null
   };
 
   /* never open a window larger than the screen can show */
-  const w = Math.max(300, Math.min(app.w || 720, VW() - 16));
-  const h = Math.max(220, Math.min(app.h || 500, VH() - TB() - 16));
-  const x = clamp(Math.round((VW() - w) / 2) + ((windows.size % 5) - 2) * 26, 8, Math.max(8, VW() - w - 8));
-  const y = clamp(Math.round((VH() - TB() - h) / 2) + ((windows.size % 5) - 2) * 22, 6, Math.max(6, VH() - TB() - h - 6));
+  const wantW = remembered && remembered.w ? remembered.w : (app.w || 720);
+  const wantH = remembered && remembered.h ? remembered.h : (app.h || 500);
+  const w = Math.max(300, Math.min(wantW, VW() - 16));
+  const h = Math.max(220, Math.min(wantH, VH() - TB() - 16));
+  const x = remembered
+    ? clamp(Math.round(remembered.x), -80, Math.max(8, VW() - 80))
+    : clamp(Math.round((VW() - w) / 2) + ((windows.size % 5) - 2) * 26, 8, Math.max(8, VW() - w - 8));
+  const y = remembered
+    ? clamp(Math.round(remembered.y), 0, Math.max(6, VH() - TB() - 60))
+    : clamp(Math.round((VH() - TB() - h) / 2) + ((windows.size % 5) - 2) * 22, 6, Math.max(6, VH() - TB() - h - 6));
 
   const node = el('div', { class: 'window' });
   node.style.cssText = `left:${x}px;top:${y}px;width:${w}px;height:${h}px;z-index:${++zTop}`;
@@ -1445,6 +1512,7 @@ function createWindow(appId, app, args = {}){
   addRecent(appId);
   if (settings.openMaximised) toggleMax(win);
   uiSound('open');
+  saveSession(true);
   return win;
 }
 
@@ -1465,11 +1533,13 @@ function minimizeWin(win){
   win.el.classList.remove('active');
   win.taskEl.classList.remove('active');
   if (activeWin === win) activeWin = null;
+  saveSession(true);
 }
 function restoreWin(win){
   win.minimized = false;
   win.el.classList.remove('min');
   focusWin(win);
+  saveSession(true);
 }
 function toggleMax(win){
   if (win.maximized){
@@ -1478,19 +1548,22 @@ function toggleMax(win){
     win.el.classList.remove('maximized');
     win.maximized = false;
   } else {
-    const r = win.el.getBoundingClientRect();
-    win.prevRect = { left: r.left, top: r.top, width: r.width, height: r.height };
+    const r = winRect(win);             // from the style: immune to animation offsets
+    win.prevRect = { left: r.x, top: r.y, width: r.w, height: r.h };
     win.el.style.cssText = `left:0;top:0;width:100%;height:100%;z-index:${win.el.style.zIndex}`;
     win.el.classList.add('maximized');
     win.maximized = true;
   }
   if (win.onResize) win.onResize();
+  saveSession(true);
 }
 function closeWin(win){
   try { if (win.cleanup) win.cleanup(); } catch(e){}
   const wasPin = win.taskEl && win.taskEl.classList.contains('pin');
+  rememberWin(win);
   win.el.remove();
   windows.delete(win.id);
+  saveSession(true);
   if (wasPin){
     win.taskEl.classList.remove('active');
     if (![...windows.values()].some(w => w.appId === win.appId)) win.taskEl.classList.remove('has-task');
@@ -1548,6 +1621,7 @@ function makeDraggable(win){
         win.el.classList.toggle('maximized', win.maximized);
         if (win.onResize) win.onResize();
       }
+      rememberWin(win);
     };
     bar.addEventListener('pointermove', move);
     bar.addEventListener('pointerup', up);
@@ -1572,7 +1646,7 @@ function makeResizable(win){
         Object.assign(win.el.style, { left:L + 'px', top:T + 'px', width:W + 'px', height:H + 'px' });
         if (win.onResize) win.onResize();
       };
-      const up = () => { handle.removeEventListener('pointermove', move); handle.removeEventListener('pointerup', up); };
+      const up = () => { handle.removeEventListener('pointermove', move); handle.removeEventListener('pointerup', up); rememberWin(win); };
       handle.addEventListener('pointermove', move);
       handle.addEventListener('pointerup', up);
     });
@@ -2273,6 +2347,8 @@ APPS.settings = {
         head('Behaviour'),
         card(
           row('Edge snapping', sw('snap'), 'Drag a window to a screen edge to snap it'),
+          row('Snap layouts', sw('snapLayouts'), 'Drag to the top edge and choose a layout'),
+          row('Restore windows after a reload', sw('restoreSession'), 'Reopen the apps you had open, where you left them'),
           row('Open apps maximised', sw('openMaximised'))
         ),
         head('Arrange'),
@@ -7994,6 +8070,7 @@ renderRecents();
 boot();
 maybeAutoCheck();
 storageCheck();
+restoreSession();
 console.log('%cuOS ' + UOS_VERSION + '%c — web operating system loaded. Apps: ' + Object.keys(APPS).length,
   'font-weight:bold;color:#0078d4;font-size:14px', 'color:#888');
 </script>
