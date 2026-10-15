@@ -7,10 +7,13 @@ dependencies, no installs, no accounts — just open it.
 
 ## New in 3.1
 
-- **Arcade** — **17 games, built in**: Snake, Block Drop (Tetris), Brick Breaker,
-  Paddle Duel, Invaders, Asteroids, Jumper, Dodger, Tower, Whack-a-mole, Reaction,
-  2048, Minesweeper, Memory, Simon, Tic-tac-toe and Word Guess. Browsable menu with
-  categories, search, best scores and play counts — all saved locally.
+- **Arcade** — **28 games, built in**. Arcade: Snake, Block Drop, Brick Breaker, Paddle
+  Duel, Invaders, Asteroids, Jumper, Dodger, Tower, Whack-a-mole, Reaction. Puzzle:
+  2048, Minesweeper, Memory, Simon, Match Three, Sliding Puzzle, Lights Out. Board:
+  Tic-tac-toe, Connect Four, Reversi. Word: Word Guess, Hangman. **Casino** — Slots,
+  Blackjack, Roulette, Video Poker, Higher or Lower, played for **virtual chips only**
+  (play money: nothing to buy, deposit or cash out). Browsable menu with categories,
+  search, best scores and play counts — all saved locally.
 - **HTML Viewer** — open, edit and run HTML locally: source on the left, live sandboxed
   preview on the right, with **⛶ Fullscreen** (Ctrl+Shift+F, Esc to exit). Opens any
   local `.html` file at any size, saves back to uOS, downloads, or opens in a real tab.
@@ -34,7 +37,8 @@ dependencies, no installs, no accounts — just open it.
   Music Studio, Clock/Timer, Task Manager, Colour Picker, QR Code, Password Generator,
   Calendar, Sticky Notes, Media Player, Code Editor, **HTML Viewer**, **My Apps**,
   **Arcade**, Photos, AI Assistant, Recycle Bin, Clipboard, Run, Widgets and About
-- **Arcade** with 17 built-in games and a proper menu — categories, search, best scores
+- **Arcade** with 28 built-in games (including a play-money casino) and a proper menu —
+  categories, search, best scores, chips
 - **Window manager** with drag, resize, minimise/maximise, edge-snapping and an Alt+Tab
   switcher
 - **Desktop** with grid-snapping icons that never overlap, marquee selection and a

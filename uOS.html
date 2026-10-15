@@ -404,6 +404,7 @@ h3.sect{font-size:12px;text-transform:uppercase;letter-spacing:1px;color:var(--t
 .arc-over.on{display:flex}
 .arc-over h3{margin:0 0 2px;font-size:19px}
 #acCats{gap:6px}
+.arc-note{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:12px 14px 0;padding:9px 12px;border:1px solid var(--border);border-radius:10px;background:var(--surface-2);font-size:12px;color:var(--text-dim);line-height:1.5}
 /* preview-only ("fullscreen") mode */
 .hsplit.onlyprev>textarea,.hsplit.onlyprev .hdiv{display:none}
 .hprev:fullscreen{background:#fff;border-radius:0}
@@ -5491,6 +5492,872 @@ game({ id:'wordle', name:'Word Guess', icon:'📝', cat:'Word', score:'guesses',
     return { reset, draw, tick(){}, key };
   } });
 
+/* --------------- shared bits for the card and casino games ----------- */
+const CARD_SUITS = ['♠','♥','♦','♣'];
+const CARD_RANKS = ['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+
+function newDeck(){
+  const d = [];
+  for (const s of CARD_SUITS) for (let r = 1; r <= 13; r++) d.push({ r: r, s: s });
+  return d.sort(() => Math.random() - 0.5);
+}
+function cardPoints(c){ return c.r > 10 ? 10 : (c.r === 1 ? 11 : c.r); }
+function blackjackTotal(cards){
+  let total = 0, aces = 0;
+  for (const c of cards){ total += cardPoints(c); if (c.r === 1) aces++; }
+  while (total > 21 && aces > 0){ total -= 10; aces--; }
+  return total;
+}
+function drawCard(ctx, x, y, w, h, c, faceUp){
+  gcRound(ctx, x, y, w, h, 7);
+  ctx.fillStyle = faceUp ? '#f8fafc' : '#1b2536'; ctx.fill();
+  ctx.strokeStyle = faceUp ? '#94a3b8' : ARCPAL.grid; ctx.lineWidth = 1.5; gcRound(ctx, x, y, w, h, 7); ctx.stroke();
+  if (!faceUp){ gcText(ctx, '?', x + w/2, y + h/2, h * 0.4, ARCPAL.dim); return; }
+  const red = c.s === '♥' || c.s === '♦';
+  const ink = red ? '#dc2626' : '#0f172a';
+  gcText(ctx, CARD_RANKS[c.r - 1], x + w/2, y + h*0.3, h * 0.28, ink);
+  gcText(ctx, c.s, x + w/2, y + h*0.7, h * 0.34, ink);
+}
+/* the casino bankroll — virtual chips, kept in local storage, play money only */
+const CHIPS_START = 1000;
+function chipsGet(){ const v = store.get('arcadeChips', CHIPS_START); return (typeof v === 'number' && isFinite(v)) ? Math.max(0, Math.round(v)) : CHIPS_START; }
+function chipsSet(n){ store.set('arcadeChips', Math.max(0, Math.round(n))); return chipsGet(); }
+function chipsAdd(n){ return chipsSet(chipsGet() + n); }
+const chips = { get: chipsGet, set: chipsSet, add: chipsAdd, START: CHIPS_START };
+
+/* ---------------------------- Connect Four --------------------------- */
+game({ id:'connect4', name:'Connect Four', icon:'🔵', cat:'Board', score:'wins',
+  blurb:'Line up four before the computer does. First to three wins.', help:'Click a column · you are red',
+  make(api){
+    const COLS = 7, ROWS = 6;
+    let g, boardOver, matchOver, wins, losses, msg;
+    const WCOL = [0,1,2,3,2,1,0];
+    function newBoard(){ g = []; for (let r = 0; r < ROWS; r++) g.push(new Array(COLS).fill(0)); boardOver = false; msg = ''; }
+    function reset(){ matchOver = false; wins = 0; losses = 0; api.setScore(0); newBoard(); }
+    function rowFor(c){ for (let r = ROWS - 1; r >= 0; r--) if (!g[r][c]) return r; return -1; }
+    function won(p){
+      const dirs = [[0,1],[1,0],[1,1],[1,-1]];
+      for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++){
+        if (g[r][c] !== p) continue;
+        for (const [dr, dc] of dirs){
+          let n = 1;
+          for (let k = 1; k < 4; k++){
+            const rr = r + dr*k, cc = c + dc*k;
+            if (rr < 0 || rr >= ROWS || cc < 0 || cc >= COLS || g[rr][cc] !== p) break;
+            n++;
+          }
+          if (n >= 4) return true;
+        }
+      }
+      return false;
+    }
+    const full = () => g[0].every(v => v);
+    function aiMove(){
+      for (let c = 0; c < COLS; c++){ const r = rowFor(c); if (r < 0) continue; g[r][c] = 2; const w = won(2); g[r][c] = 0; if (w) return c; }
+      for (let c = 0; c < COLS; c++){ const r = rowFor(c); if (r < 0) continue; g[r][c] = 1; const w = won(1); g[r][c] = 0; if (w) return c; }
+      let best = -1, bs = -1e9;
+      for (const c of [3,2,4,1,5,0,6]){
+        const r = rowFor(c); if (r < 0) continue;
+        g[r][c] = 2;
+        let s = WCOL[c] * 2;
+        for (let rr = 0; rr < ROWS; rr++) for (let cc = 0; cc < COLS; cc++){
+          if (g[rr][cc] === 2) s += WCOL[cc] * 0.4;
+          if (g[rr][cc] === 1) s -= WCOL[cc] * 0.35;
+        }
+        g[r][c] = 0;
+        s += api.rnd(0, 0.8);
+        if (s > bs){ bs = s; best = c; }
+      }
+      return best;
+    }
+    function finishBoard(winner){
+      boardOver = true;
+      if (winner === 1){ wins++; api.setScore(wins); msg = 'you win the round'; if (wins >= 3){ matchOver = true; api.end(); } }
+      else if (winner === 2){ losses++; msg = 'cpu wins the round'; if (losses >= 3){ matchOver = true; api.end(); } }
+      else msg = 'a draw';
+    }
+    function play(c){
+      if (matchOver || boardOver || c < 0 || c >= COLS) return;
+      const r = rowFor(c); if (r < 0) return;
+      g[r][c] = 1;
+      if (won(1)) return finishBoard(1);
+      if (full()) return finishBoard(0);
+      const ac = aiMove();
+      const ar = rowFor(ac);
+      if (ar >= 0) g[ar][ac] = 2;
+      if (won(2)) return finishBoard(2);
+      if (full()) return finishBoard(0);
+    }
+    function geo(){ const size = Math.min(api.w * 0.94, api.h * 0.9); return { size: size, cell: size / COLS, ox: (api.w - size)/2, oy: (api.h - size)/2 + 12 }; }
+    function tap(x, y){
+      if (boardOver && !matchOver){ newBoard(); return; }
+      const { cell, ox } = geo();
+      play(Math.floor((x - ox) / cell));
+    }
+    function key(k, down){ if (down && /^[1-7]$/.test(k)){ if (boardOver && !matchOver) newBoard(); else play(+k - 1); } }
+    function draw(){
+      const ctx = api.ctx;
+      const { cell, ox, oy } = geo();
+      gcClear(ctx, api.w, api.h);
+      for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++){
+        const x = ox + c*cell, y = oy + r*cell;
+        ctx.fillStyle = ARCPAL.stone; gcRound(ctx, x + 2, y + 2, cell - 4, cell - 4, cell/2); ctx.fill();
+        const v = g[r][c];
+        if (v){
+          ctx.fillStyle = v === 1 ? ARCPAL.e : ARCPAL.d;
+          ctx.beginPath(); ctx.arc(x + cell/2, y + cell/2, cell * 0.34, 0, 7); ctx.fill();
+        }
+      }
+      gcText(ctx, 'you ' + wins + ' · cpu ' + losses + ' (first to 3)', api.w/2, oy - 16, 13, ARCPAL.dim);
+      if (msg) gcText(ctx, msg + (matchOver ? '' : ' — click for the next round'), api.w/2, oy + ROWS*cell + 16, 13, ARCPAL.a);
+    }
+    return { reset, draw, tick(){}, tap, key };
+  } });
+
+/* ------------------------------ Reversi ------------------------------ */
+game({ id:'reversi', name:'Reversi', icon:'⚫', cat:'Board', score:'wins',
+  blurb:'Sandwich the computer and flip its pieces.', help:'Click a highlighted square · you are black',
+  make(api){
+    const N = 8, DIRS = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+    let g, boardOver, matchOver, wins, losses, msg;
+    function newBoard(){
+      g = []; for (let r = 0; r < N; r++) g.push(new Array(N).fill(0));
+      g[3][3] = g[4][4] = 2; g[3][4] = g[4][3] = 1;
+      boardOver = false; msg = '';
+    }
+    function reset(){ matchOver = false; wins = 0; losses = 0; api.setScore(0); newBoard(); }
+    function flips(r0, c0, p){
+      if (g[r0][c0]) return [];
+      const all = [];
+      for (const [dr, dc] of DIRS){
+        const line = [];
+        let r = r0 + dr, c = c0 + dc;
+        while (r >= 0 && r < N && c >= 0 && c < N && g[r][c] === (p === 1 ? 2 : 1)){
+          line.push([r, c]); r += dr; c += dc;
+        }
+        if (line.length && r >= 0 && r < N && c >= 0 && c < N && g[r][c] === p) all.push(...line);
+      }
+      return all;
+    }
+    function moves(p){
+      const out = [];
+      for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) if (flips(r, c, p).length) out.push([r, c]);
+      return out;
+    }
+    function counts(){ let a = 0, b = 0; for (let r = 0; r < N; r++) for (let c = 0; c < N; c++){ if (g[r][c] === 1) a++; if (g[r][c] === 2) b++; } return [a, b]; }
+    function place(r, c, p){ g[r][c] = p; for (const [rr, cc] of flips(r, c, p)) g[rr][cc] = p; }
+    function settleBoard(){
+      const [mine, theirs] = counts();
+      boardOver = true;
+      if (mine > theirs){ wins++; api.setScore(wins); msg = 'you win'; if (wins >= 3){ matchOver = true; api.end(); } }
+      else if (theirs > mine){ losses++; msg = 'cpu wins'; if (losses >= 3){ matchOver = true; api.end(); } }
+      else msg = 'a draw';
+    }
+    function endOrPass(){
+      if (!moves(1).length && !moves(2).length){ settleBoard(); return; }
+      if (!moves(2).length){ boardOver = false; return; }        // cpu must pass
+      // cpu: greedy on flips plus corners
+      let best = null, bs = -1e9;
+      for (const [r, c] of moves(2)){
+        const f = flips(r, c, 2).length;
+        const corner = (r === 0 || r === N-1) && (c === 0 || c === N-1) ? 6 : 0;
+        const edge = (r === 0 || r === N-1 || c === 0 || c === N-1) ? 1.5 : 0;
+        const s = f + corner + edge + api.rnd(0, 0.9);
+        if (s > bs){ bs = s; best = [r, c]; }
+      }
+      if (best) place(best[0], best[1], 2);
+      if (!moves(1).length && !moves(2).length) settleBoard();
+    }
+    function tap(x, y){
+      if (boardOver && !matchOver){ newBoard(); return; }
+      if (boardOver) return;
+      const { cell, ox, oy } = geo();
+      const c = Math.floor((x - ox)/cell), r = Math.floor((y - oy)/cell);
+      if (r < 0 || r >= N || c < 0 || c >= N) return;
+      if (!flips(r, c, 1).length) return;
+      place(r, c, 1);
+      endOrPass();
+    }
+    function geo(){ const size = Math.min(api.w * 0.86, api.h * 0.9); return { cell: size / N, ox: (api.w - size)/2, oy: (api.h - size)/2 + 10 }; }
+    function draw(){
+      const ctx = api.ctx;
+      const { cell, ox, oy } = geo();
+      gcClear(ctx, api.w, api.h);
+      ctx.fillStyle = '#14532d'; gcRound(ctx, ox - 6, oy - 6, cell*N + 12, cell*N + 12, 8); ctx.fill();
+      const hints = boardOver ? [] : moves(1);
+      for (let r = 0; r < N; r++) for (let c = 0; c < N; c++){
+        const x = ox + c*cell, y = oy + r*cell;
+        ctx.strokeStyle = 'rgba(255,255,255,.12)'; ctx.lineWidth = 1;
+        ctx.strokeRect(x, y, cell, cell);
+        const v = g[r][c];
+        if (v){
+          ctx.fillStyle = v === 1 ? '#0b1220' : '#f8fafc';
+          ctx.beginPath(); ctx.arc(x + cell/2, y + cell/2, cell * 0.38, 0, 7); ctx.fill();
+        } else if (hints.some(([rr, cc]) => rr === r && cc === c)){
+          ctx.fillStyle = 'rgba(255,255,255,.28)';
+          ctx.beginPath(); ctx.arc(x + cell/2, y + cell/2, cell * 0.13, 0, 7); ctx.fill();
+        }
+      }
+      const [mine, theirs] = counts();
+      gcText(ctx, '⬤ ' + mine + '   ○ ' + theirs + '   (won ' + wins + '/' + losses + ')', api.w/2, oy - 16, 13, ARCPAL.dim);
+      if (msg) gcText(ctx, msg + (matchOver ? '' : ' — click for the next round'), api.w/2, oy + N*cell + 16, 13, ARCPAL.a);
+    }
+    return { reset, draw, tick(){}, tap };
+  } });
+
+/* ---------------------------- Match Three ---------------------------- */
+game({ id:'match3', name:'Match Three', icon:'🍬', cat:'Puzzle', score:'points',
+  blurb:'Swap neighbours to line up three. Sixty seconds.', help:'Click a tile, then a neighbour',
+  make(api){
+    const N = 8, T = 6;
+    const ICON = ['🍒','🍋','🍇','🔵','🟣','🟢'];
+    let g, sel, t;
+    const rndv = () => api.ri(0, T - 1);
+    function fill(){
+      g = [];
+      for (let r = 0; r < N; r++){
+        const row = [];
+        for (let c = 0; c < N; c++){
+          let v, guard = 0;
+          do { v = rndv(); guard++; }
+          while (guard < 40 && ((c > 1 && row[c-1] === v && row[c-2] === v) || (r > 1 && g[r-1][c] === v && g[r-2][c] === v)));
+          row.push(v);
+        }
+        g.push(row);
+      }
+    }
+    function matches(){
+      const out = new Set();
+      for (let r = 0; r < N; r++) for (let c = 0; c < N - 2; c++){
+        const v = g[r][c];
+        if (v != null && v === g[r][c+1] && v === g[r][c+2]){ out.add(r+','+c); out.add(r+','+(c+1)); out.add(r+','+(c+2)); }
+      }
+      for (let c = 0; c < N; c++) for (let r = 0; r < N - 2; r++){
+        const v = g[r][c];
+        if (v != null && v === g[r+1][c] && v === g[r+2][c]){ out.add(r+','+c); out.add((r+1)+','+c); out.add((r+2)+','+c); }
+      }
+      return out;
+    }
+    function collapse(){
+      for (let c = 0; c < N; c++){
+        let write = N - 1;
+        for (let r = N - 1; r >= 0; r--) if (g[r][c] != null){ g[write][c] = g[r][c]; write--; }
+        for (let r = write; r >= 0; r--) g[r][c] = rndv();
+      }
+    }
+    function reset(){ fill(); sel = null; t = 60; api.setScore(0); }
+    function tick(dt){ t -= dt; if (t <= 0 && !api.over) api.end(); }
+    function geo(){ const size = Math.min(api.w, api.h) * 0.94, cell = size / N; return { cell: cell, ox: (api.w - size)/2, oy: (api.h - size)/2 }; }
+    function swap(a, b){
+      const tmp = g[a.r][a.c]; g[a.r][a.c] = g[b.r][b.c]; g[b.r][b.c] = tmp;
+      if (!matches().size){ const back = g[a.r][a.c]; g[a.r][a.c] = g[b.r][b.c]; g[b.r][b.c] = back; return; }
+      let chain = 0, m;
+      while ((m = matches()).size){
+        chain++;
+        api.add(m.size * 4 * chain);
+        m.forEach(k => { const p = k.split(',').map(Number); g[p[0]][p[1]] = null; });
+        collapse();
+      }
+    }
+    function tap(x, y){
+      const { cell, ox, oy } = geo();
+      const c = Math.floor((x - ox)/cell), r = Math.floor((y - oy)/cell);
+      if (r < 0 || r >= N || c < 0 || c >= N) return;
+      if (!sel){ sel = { r: r, c: c }; return; }
+      if (sel.r === r && sel.c === c){ sel = null; return; }
+      if (Math.abs(sel.r - r) + Math.abs(sel.c - c) === 1) swap(sel, { r: r, c: c });
+      sel = { r: r, c: c };
+    }
+    function draw(){
+      const ctx = api.ctx;
+      const { cell, ox, oy } = geo();
+      gcClear(ctx, api.w, api.h);
+      for (let r = 0; r < N; r++) for (let c = 0; c < N; c++){
+        const x = ox + c*cell, y = oy + r*cell;
+        const v = g[r][c];
+        ctx.globalAlpha = v == null ? 0.12 : 1;
+        gcRound(ctx, x + 2, y + 2, cell - 4, cell - 4, 8);
+        ctx.fillStyle = v == null ? ARCPAL.grid : ARCPAL.stone; ctx.fill();
+        if (v != null) gcText(ctx, ICON[v], x + cell/2, y + cell/2, cell * 0.56, '#fff');
+        ctx.globalAlpha = 1;
+        if (sel && sel.r === r && sel.c === c){
+          ctx.strokeStyle = ARCPAL.d; ctx.lineWidth = 3;
+          gcRound(ctx, x + 2, y + 2, cell - 4, cell - 4, 8); ctx.stroke();
+        }
+      }
+      gcText(ctx, '⏱ ' + Math.max(0, t).toFixed(0) + 's', 14, 16, 13, ARCPAL.fg, 'left');
+    }
+    return { reset, tick, draw, tap };
+  } });
+
+/* --------------------------- Sliding Puzzle -------------------------- */
+game({ id:'slide', name:'Sliding Puzzle', icon:'🧩', cat:'Puzzle', score:'moves', lower:true,
+  blurb:'Slide the tiles back into order — fewest moves wins.', help:'Click a tile beside the gap · arrow keys too',
+  make(api){
+    const N = 4;
+    let t, moves;
+    const goal = () => { const a = []; for (let i = 1; i < N*N; i++) a.push(i); a.push(0); return a; };
+    const idx = (r, c) => r*N + c;
+    function reset(){
+      t = goal();
+      moves = 0; api.setScore(0);
+      // shuffle with legal moves only, so it always stays solvable
+      let blank = N*N - 1, last = -1;
+      for (let i = 0; i < 220; i++){
+        const nb = neighbours(blank).filter(n => n !== last);
+        const pick = nb[api.ri(0, nb.length - 1)];
+        t[blank] = t[pick]; t[pick] = 0;
+        last = blank; blank = pick;
+      }
+      if (solved()) reset();
+    }
+    function neighbours(i){
+      const r = Math.floor(i / N), c = i % N, out = [];
+      if (r > 0) out.push(idx(r-1, c));
+      if (r < N-1) out.push(idx(r+1, c));
+      if (c > 0) out.push(idx(r, c-1));
+      if (c < N-1) out.push(idx(r, c+1));
+      return out;
+    }
+    const blankAt = () => t.indexOf(0);
+    const solved = () => t.every((v, i) => v === goal()[i]);
+    function move(i){
+      const b = blankAt();
+      if (neighbours(b).indexOf(i) < 0) return;
+      t[b] = t[i]; t[i] = 0; moves++; api.setScore(moves);
+      if (solved()) api.end();
+    }
+    function geo(){ const size = Math.min(api.w, api.h) * 0.86, cell = size / N; return { cell: cell, ox: (api.w - size)/2, oy: (api.h - size)/2 }; }
+    function tap(x, y){
+      const { cell, ox, oy } = geo();
+      const c = Math.floor((x - ox)/cell), r = Math.floor((y - oy)/cell);
+      if (r < 0 || r >= N || c < 0 || c >= N) return;
+      move(idx(r, c));
+    }
+    function key(k){
+      const b = blankAt(), r = Math.floor(b / N), c = b % N;
+      if (k === 'arrowup' || k === 'w') move(idx(r+1, c));
+      if (k === 'arrowdown' || k === 's') move(idx(r-1, c));
+      if (k === 'arrowleft' || k === 'a') move(idx(r, c+1));
+      if (k === 'arrowright' || k === 'd') move(idx(r, c-1));
+    }
+    function draw(){
+      const ctx = api.ctx;
+      const { cell, ox, oy } = geo();
+      gcClear(ctx, api.w, api.h);
+      for (let i = 0; i < N*N; i++){
+        const r = Math.floor(i / N), c = i % N;
+        const x = ox + c*cell, y = oy + r*cell;
+        const v = t[i];
+        gcRound(ctx, x + 3, y + 3, cell - 6, cell - 6, 8);
+        ctx.fillStyle = v === 0 ? ARCPAL.bg : (v === goal()[i] ? ARCPAL.c : ARCPAL.b);
+        ctx.fill();
+        if (v) gcText(ctx, String(v), x + cell/2, y + cell/2, cell * 0.38, '#fff');
+      }
+      gcText(ctx, moves + ' moves', api.w/2, oy + N*cell + 18, 13, ARCPAL.dim);
+    }
+    return { reset, draw, tick(){}, tap, key };
+  } });
+
+/* ------------------------------ Lights Out --------------------------- */
+game({ id:'lights', name:'Lights Out', icon:'💡', cat:'Puzzle', score:'moves', lower:true,
+  blurb:'Turn every light off. Each press flips its neighbours.', help:'Click a tile',
+  make(api){
+    const N = 5;
+    let g, moves, won;
+    function reset(){
+      g = []; for (let r = 0; r < N; r++) g.push(new Array(N).fill(0));
+      moves = 0; won = false; api.setScore(0);
+      for (let i = 0; i < 8; i++) press(api.ri(0, N-1), api.ri(0, N-1), true);
+      if (allOff()) reset();
+    }
+    const allOff = () => g.every(row => row.every(v => !v));
+    function press(r, c, quiet){
+      for (const [dr, dc] of [[0,0],[-1,0],[1,0],[0,-1],[0,1]]){
+        const rr = r + dr, cc = c + dc;
+        if (rr >= 0 && rr < N && cc >= 0 && cc < N) g[rr][cc] = g[rr][cc] ? 0 : 1;
+      }
+      if (!quiet){ moves++; api.setScore(moves); if (allOff()){ won = true; api.end(); } }
+    }
+    function geo(){ const size = Math.min(api.w, api.h) * 0.8, cell = size / N; return { cell: cell, ox: (api.w - size)/2, oy: (api.h - size)/2 }; }
+    function tap(x, y){
+      const { cell, ox, oy } = geo();
+      const c = Math.floor((x - ox)/cell), r = Math.floor((y - oy)/cell);
+      if (r < 0 || r >= N || c < 0 || c >= N) return;
+      press(r, c);
+    }
+    function draw(){
+      const ctx = api.ctx;
+      const { cell, ox, oy } = geo();
+      gcClear(ctx, api.w, api.h);
+      for (let r = 0; r < N; r++) for (let c = 0; c < N; c++){
+        const x = ox + c*cell, y = oy + r*cell;
+        gcRound(ctx, x + 4, y + 4, cell - 8, cell - 8, 10);
+        ctx.fillStyle = g[r][c] ? ARCPAL.d : ARCPAL.stone; ctx.fill();
+        if (g[r][c]){ gcText(ctx, '💡', x + cell/2, y + cell/2, cell * 0.5, '#fff'); }
+      }
+      gcText(ctx, moves + ' moves · switch them all off', api.w/2, oy + N*cell + 18, 13, ARCPAL.dim);
+    }
+    return { reset, draw, tick(){}, tap };
+  } });
+
+/* ------------------------------ Hangman ------------------------------ */
+game({ id:'hangman', name:'Hangman', icon:'🔤', cat:'Word', score:'wrong', lower:true,
+  blurb:'Guess the word before you run out of lives.', help:'Type letters',
+  make(api){
+    const WORDS = ('apple bridge candle dragon engine forest garden hammer island jungle kitten lizard magnet napkin orange pencil quartz rocket silver tunnel velvet walrus yellow zephyr basket copper dinner falcon guitar helmet insect jacket kettle ladder monkey needle object parcel quiver ribbon saddle tundra urchin violet waffle anchor bottle cactus domino ember fudge gopher hollow igloo jigsaw knights liquor muffin nugget octopus puzzle rhythm soccer teapot ukulele violin wicket').split(' ');
+    let word, found, wrong, msg;
+    function reset(){
+      word = WORDS[api.ri(0, WORDS.length - 1)];
+      found = new Set(); wrong = new Set(); msg = ''; api.setScore(0);
+    }
+    const masked = () => word.split('').map(ch => found.has(ch) ? ch : '·').join(' ');
+    function key(k, down){
+      if (!down || !/^[a-z]$/.test(k)) return;
+      if (found.has(k) || wrong.has(k)) return;
+      if (word.indexOf(k) >= 0){
+        found.add(k);
+        if (word.split('').every(ch => found.has(ch))) api.end();
+      } else {
+        wrong.add(k); api.setScore(wrong.size);
+        if (wrong.size >= 6){ msg = 'the word was ' + word.toUpperCase(); api.end(); }
+      }
+    }
+    function draw(){
+      const ctx = api.ctx;
+      gcClear(ctx, api.w, api.h);
+      // gallows
+      const bx = api.w * 0.22, by = api.h * 0.82, sc = Math.min(api.w, api.h) * 0.0016;
+      ctx.strokeStyle = ARCPAL.dim; ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.moveTo(bx - 60, by); ctx.lineTo(bx + 60, by); ctx.moveTo(bx, by); ctx.lineTo(bx, by - 150); ctx.lineTo(bx + 70, by - 150); ctx.lineTo(bx + 70, by - 118); ctx.stroke();
+      const step = wrong.size;
+      ctx.strokeStyle = ARCPAL.e; ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.arc(bx + 70, by - 100, 18, 0, 7); ctx.stroke();
+      if (step > 1){ ctx.beginPath(); ctx.moveTo(bx + 70, by - 82); ctx.lineTo(bx + 70, by - 26); ctx.stroke(); }
+      if (step > 2){ ctx.beginPath(); ctx.moveTo(bx + 70, by - 66); ctx.lineTo(bx + 44, by - 44); ctx.stroke(); }
+      if (step > 3){ ctx.beginPath(); ctx.moveTo(bx + 70, by - 66); ctx.lineTo(bx + 96, by - 44); ctx.stroke(); }
+      if (step > 4){ ctx.beginPath(); ctx.moveTo(bx + 70, by - 26); ctx.lineTo(bx + 48, by + 8); ctx.stroke(); }
+      if (step > 5){ ctx.beginPath(); ctx.moveTo(bx + 70, by - 26); ctx.lineTo(bx + 92, by + 8); ctx.stroke(); }
+      gcText(ctx, masked(), api.w * 0.62, api.h * 0.36, Math.min(46, api.w * 0.052), ARCPAL.fg, 'center');
+      gcText(ctx, 'wrong: ' + (wrong.size ? [...wrong].join(' ').toUpperCase() : '—'), api.w * 0.62, api.h * 0.52, 15, ARCPAL.e);
+      gcText(ctx, (6 - wrong.size) + ' lives left', api.w * 0.62, api.h * 0.62, 14, ARCPAL.dim);
+      if (msg) gcText(ctx, msg, api.w * 0.62, api.h * 0.74, 15, ARCPAL.d);
+    }
+    return { reset, draw, tick(){}, key };
+  } });
+
+/* ============================== CASINO ==============================
+   Play money only. `chips` is a virtual bankroll kept in local storage —
+   there is nothing to buy, nothing to deposit and nothing to cash out.
+   Each game plays a ten-round session and reports your winnings.        */
+const CASINO_ROUNDS = 10;
+
+/* -------------------------------- Slots ------------------------------ */
+game({ id:'slots', name:'Slots', icon:'🎰', cat:'Casino', score:'winnings',
+  blurb:'Ten spins. Line three up and it pays.', help:'Space or click to spin · ← → change the bet',
+  make(api){
+    const SYM = ['🍒','🍋','🔔','⭐','💎','7️⃣'];
+    const PAY = [4, 6, 10, 16, 30, 60];
+    let reels, t, bet, rounds, start, msg, spin;
+    function reset(){
+      reels = [0, 1, 2]; t = 0; bet = 10; rounds = 0; start = api.bank.get();
+      msg = 'Ready — press space'; spin = false; api.setScore(0);
+    }
+    function pull(){
+      if (t > 0) return;
+      if (rounds >= CASINO_ROUNDS){ msg = 'session over — press R to restart'; return; }
+      if (api.bank.get() < bet){ api.bank.set(CHIPS_START); msg = 'top-up: back to ' + CHIPS_START; return; }
+      api.bank.add(-bet);
+      rounds++;
+      const a = api.ri(0, SYM.length - 1);
+      let b = api.ri(0, SYM.length - 1), c = api.ri(0, SYM.length - 1);
+      if (Math.random() < 0.10){ b = a; c = a; }
+      else if (Math.random() < 0.30) b = a;
+      reels = [a, b, c];
+      t = 1.0; spin = true; msg = 'spinning…';
+    }
+    function settle(){
+      const [a, b, c] = reels;
+      let mult = 0;
+      if (a === b && b === c) mult = PAY[a] / 4;
+      else if (a === b || b === c || a === c) mult = 1;
+      const payout = Math.round(bet * mult);
+      if (payout){ api.bank.add(payout); msg = 'paid ' + payout; }
+      else msg = 'no luck';
+      api.setScore(Math.max(0, api.bank.get() - start));
+      if (rounds >= CASINO_ROUNDS){ msg = 'session over — net ' + (api.bank.get() - start); api.end(); }
+      spin = false;
+    }
+    function tick(dt){
+      if (t > 0){ t -= dt; if (t <= 0){ t = 0; settle(); } }
+    }
+    function key(k, down){
+      if (!down) return;
+      if (k === ' ' || k === 'enter') pull();
+      if (k === 'arrowleft' || k === 'a') bet = Math.max(5, bet - 5);
+      if (k === 'arrowright' || k === 'd') bet = Math.min(200, bet + 5);
+      if (k === 'r'){ if (rounds >= CASINO_ROUNDS){ const b = api.bank.get(); reset(); api.bank.set(b); } }
+    }
+    function tap(){ pull(); }
+    function draw(){
+      const ctx = api.ctx;
+      gcClear(ctx, api.w, api.h);
+      const size = Math.min(api.w * 0.8, api.h * 0.5), w = size / 3.3, h = size * 0.62;
+      const ox = (api.w - (w*3 + 16)) / 2, oy = api.h * 0.3;
+      reels.forEach((v, i) => {
+        const x = ox + i * (w + 8);
+        gcRound(ctx, x, oy, w, h, 12);
+        ctx.fillStyle = ARCPAL.stone; ctx.fill();
+        ctx.strokeStyle = spin && i === 0 ? ARCPAL.d : ARCPAL.grid; ctx.lineWidth = 2;
+        gcRound(ctx, x, oy, w, h, 12); ctx.stroke();
+        gcText(ctx, SYM[v], x + w/2, oy + h/2, Math.min(w, h) * 0.52, '#fff');
+      });
+      gcText(ctx, msg, api.w/2, oy + h + 26, 15, ARCPAL.fg);
+      gcText(ctx, 'bet ' + bet + '   ·   round ' + Math.min(rounds, CASINO_ROUNDS) + '/' + CASINO_ROUNDS + '   ·   chips ' + api.bank.get(),
+        api.w/2, api.h - 22, 14, ARCPAL.dim);
+    }
+    return { reset, tick, draw, key, tap };
+  } });
+
+/* ------------------------------ Blackjack ---------------------------- */
+game({ id:'blackjack', name:'Blackjack', icon:'♠️', cat:'Casino', score:'winnings',
+  blurb:'Beat the dealer to 21. Ten hands, virtual chips.', help:'Space deal · H hit · S stand · D double',
+  make(api){
+    let deck, me, them, state, bet, rounds, start, msg;
+    function reset(){
+      deck = newDeck(); me = []; them = []; state = 'idle'; bet = 10; rounds = 0;
+      start = api.bank.get(); msg = 'Press space to deal'; api.setScore(0);
+    }
+    function draw2(who){ who.push(deck.pop()); who.push(deck.pop()); }
+    function deal(){
+      if (state === 'player') return;
+      if (rounds >= CASINO_ROUNDS){ msg = 'session over — press R'; return; }
+      if (api.bank.get() < bet){ api.bank.set(CHIPS_START); msg = 'top-up: back to ' + CHIPS_START; }
+      api.bank.add(-bet);
+      rounds++;
+      if (deck.length < 12) deck = newDeck();
+      me = []; them = [];
+      draw2(me); draw2(them);
+      state = 'player';
+      msg = 'hit or stand?';
+      if (blackjackTotal(me) === 21){ stand(); }
+    }
+    function settle(outcome){
+      const net = outcome === 'win' ? bet : outcome === 'blackjack' ? Math.round(bet * 1.5) : outcome === 'push' ? 0 : -bet;
+      api.bank.add(bet + net);
+      msg = outcome === 'win' ? 'you win ' + (bet + net) : outcome === 'blackjack' ? 'blackjack! +' + (bet + net) :
+            outcome === 'push' ? 'push — bet returned' : 'dealer wins';
+      state = 'done';
+      api.setScore(Math.max(0, api.bank.get() - start));
+      if (rounds >= CASINO_ROUNDS){ msg += '  ·  session over'; api.end(); }
+    }
+    function hit(){
+      if (state !== 'player') return;
+      me.push(deck.pop());
+      const t = blackjackTotal(me);
+      if (t > 21) settle('lose');
+      else if (t === 21) stand();
+    }
+    function stand(){
+      if (state !== 'player') return;
+      state = 'dealer';
+      const mine = blackjackTotal(me);
+      if (mine === 21 && me.length === 2){ settle('blackjack'); return; }
+      while (blackjackTotal(them) < 17) them.push(deck.pop());
+      const theirs = blackjackTotal(them);
+      if (theirs > 21 || mine > theirs) settle('win');
+      else if (theirs === mine) settle('push');
+      else settle('lose');
+    }
+    function dbl(){
+      if (state !== 'player') return;
+      if (api.bank.get() < bet){ msg = 'not enough chips to double'; return; }
+      api.bank.add(-bet); bet *= 2;
+      me.push(deck.pop());
+      if (blackjackTotal(me) > 21) settle('lose'); else stand();
+    }
+    function key(k, down){
+      if (!down) return;
+      if (k === ' ' || k === 'enter') deal();
+      if (k === 'h') hit();
+      if (k === 's') stand();
+      if (k === 'd') dbl();
+      if (k === 'r' && state === 'done'){ const b = api.bank.get(); reset(); api.bank.set(b); }
+    }
+    function tap(){ if (state === 'idle' || state === 'done') deal(); else hit(); }
+    function draw(){
+      const ctx = api.ctx;
+      gcClear(ctx, api.w, api.h);
+      const cw = Math.min(74, api.w * 0.1), chh = cw * 1.45;
+      const show = state === 'dealer' || state === 'done';
+      const row = (cards, y, hideFirst) => cards.forEach((c, i) => {
+        drawCard(ctx, api.w/2 - (cards.length * (cw + 10))/2 + i * (cw + 10), y, cw, chh, c, !(hideFirst && i === 0));
+      });
+      gcText(ctx, 'dealer ' + (show ? blackjackTotal(them) : '?'), api.w/2, 34, 14, ARCPAL.dim);
+      row(them, 46, !show);
+      gcText(ctx, 'you ' + blackjackTotal(me), api.w/2, api.h - 46 - chh - 24, 14, ARCPAL.dim);
+      row(me, api.h - 46 - chh, false);
+      gcText(ctx, msg, api.w/2, api.h - 22, 15, ARCPAL.fg);
+      gcText(ctx, 'hand ' + Math.min(rounds + (state === 'idle' ? 0 : 0), CASINO_ROUNDS) + '/' + CASINO_ROUNDS +
+        ' · bet ' + bet + ' · chips ' + api.bank.get(), api.w/2, 16, 13, ARCPAL.dim);
+    }
+    return { reset, draw, tick(){}, key, tap };
+  } });
+
+/* ------------------------------ Roulette ----------------------------- */
+game({ id:'roulette', name:'Roulette', icon:'🎡', cat:'Casino', score:'winnings',
+  blurb:'Ten spins. Pick a colour, odd/even, or a number.', help:'R red · B black · O odd · E even · click a tile · Space spin',
+  make(api){
+    const RED = [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36];
+    const pick = ['red','black','odd','even','zero'];
+    let choice, bet, rounds, start, msg, result, spinning, ang, t;
+    const isRed = n => RED.indexOf(n) >= 0;
+    function reset(){ choice = 'red'; bet = 10; rounds = 0; start = api.bank.get(); msg = 'Pick a bet, then spin'; result = null; spinning = 0; ang = 0; t = 0; api.setScore(0); }
+    function spin(){
+      if (spinning) return;
+      if (rounds >= CASINO_ROUNDS){ msg = 'session over — press R'; return; }
+      if (api.bank.get() < bet){ api.bank.set(CHIPS_START); msg = 'top-up: back to ' + CHIPS_START; }
+      api.bank.add(-bet);
+      rounds++;
+      result = api.ri(0, 36);
+      spinning = 1; t = 1.4;
+    }
+    function settle(){
+      spinning = 0;
+      const n = result;
+      let win = 0;
+      if (choice === 'zero') win = n === 0 ? bet * 35 : 0;
+      else if (choice === 'red') win = (n !== 0 && isRed(n)) ? bet : 0;
+      else if (choice === 'black') win = (n !== 0 && !isRed(n)) ? bet : 0;
+      else if (choice === 'odd') win = (n !== 0 && n % 2 === 1) ? bet : 0;
+      else if (choice === 'even') win = (n !== 0 && n % 2 === 0) ? bet : 0;
+      if (win) api.bank.add(bet + win);
+      msg = n + ' ' + (n === 0 ? '' : isRed(n) ? 'red' : 'black') + (win ? ' — you won ' + (bet + win) : ' — no luck');
+      api.setScore(Math.max(0, api.bank.get() - start));
+      if (rounds >= CASINO_ROUNDS){ msg += '  ·  session over'; api.end(); }
+    }
+    function tick(dt){
+      if (spinning){ t -= dt; ang += dt * 9; if (t <= 0) settle(); }
+    }
+    function key(k, down){
+      if (!down) return;
+      if (k === 'r') choice = 'red';
+      if (k === 'b') choice = 'black';
+      if (k === 'o') choice = 'odd';
+      if (k === 'e') choice = 'even';
+      if (k === 'z') choice = 'zero';
+      if (k === ' ' || k === 'enter') spin();
+      if (k === 'arrowleft' || k === 'a') bet = Math.max(5, bet - 5);
+      if (k === 'arrowright' || k === 'd') bet = Math.min(200, bet + 5);
+    }
+    const TILES = () => {
+      const w = Math.min(150, api.w * 0.21), h = 46, gap = 10;
+      const total = pick.length * w + (pick.length - 1) * gap;
+      return { w, h, gap, ox: (api.w - total)/2, oy: api.h - 84 };
+    };
+    function tap(x, y){
+      const T = TILES();
+      if (y >= T.oy && y <= T.oy + T.h){
+        const i = Math.floor((x - T.ox) / (T.w + T.gap));
+        if (i >= 0 && i < pick.length){ choice = pick[i]; return; }
+      }
+      spin();
+    }
+    function draw(){
+      const ctx = api.ctx;
+      gcClear(ctx, api.w, api.h);
+      const cx = api.w/2, cy = api.h * 0.36, R = Math.min(api.w, api.h) * 0.26;
+      ctx.strokeStyle = ARCPAL.grid; ctx.lineWidth = 2;
+      for (let i = 0; i < 37; i++){
+        const a0 = (i/37) * Math.PI * 2 + ang * (spinning ? 1 : 0);
+        ctx.fillStyle = i === 0 ? ARCPAL.c : isRed(i) ? '#b91c1c' : '#111827';
+        ctx.beginPath(); ctx.moveTo(cx, cy);
+        ctx.arc(cx, cy, R, a0, a0 + (Math.PI*2/37) + 0.01); ctx.closePath(); ctx.fill();
+      }
+      ctx.strokeStyle = ARCPAL.fg; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(cx, cy, R, 0, 7); ctx.stroke();
+      if (result != null) gcText(ctx, String(result), cx, cy, R * 0.62, '#fff');
+      const T = TILES();
+      pick.forEach((p, i) => {
+        const x = T.ox + i * (T.w + T.gap);
+        gcRound(ctx, x, T.oy, T.w, T.h, 8);
+        ctx.fillStyle = choice === p ? ARCPAL.a : ARCPAL.stone; ctx.fill();
+        gcText(ctx, p.toUpperCase(), x + T.w/2, T.oy + T.h/2, 14, '#fff');
+      });
+      gcText(ctx, msg, api.w/2, 20, 15, ARCPAL.fg);
+      gcText(ctx, 'bet ' + bet + ' · spin ' + Math.min(rounds, CASINO_ROUNDS) + '/' + CASINO_ROUNDS + ' · chips ' + api.bank.get(), api.w/2, api.h - 18, 13, ARCPAL.dim);
+    }
+    return { reset, tick, draw, key, tap };
+  } });
+
+/* ---------------------------- Video Poker ---------------------------- */
+game({ id:'poker', name:'Video Poker', icon:'♣️', cat:'Casino', score:'winnings',
+  blurb:'Jacks or better pays. Hold what you like, then draw.', help:'1-5 hold · Space deal/draw',
+  make(api){
+    let deck;
+    let hand, held, state, bet, rounds, start, msg;
+    const PAY = [0, 1, 2, 3, 4, 6, 9, 25, 50, 250];   // per unit bet
+    const NAMES = ['nothing','jacks or better','two pair','three of a kind','straight','flush','full house','four of a kind','straight flush','royal flush'];
+    function reset(){
+      hand = []; held = [false,false,false,false,false]; state = 'idle';
+      bet = 10; rounds = 0; start = api.bank.get(); msg = 'Press space to deal'; api.setScore(0);
+    }
+    function rank(c){ return c.r; }
+    function evaluate(cards){
+      const rs = cards.map(rank).sort((a, b) => a - b);
+      const suits = cards.map(c => c.s);
+      const flush = suits.every(s => s === suits[0]);
+      const uniq = [...new Set(rs)];
+      const counts = uniq.map(v => rs.filter(x => x === v).length).sort((a, b) => b - a);
+      let straight = false;
+      if (uniq.length === 5){
+        if (rs[4] - rs[0] === 4) straight = true;
+        if (rs.join(',') === '1,10,11,12,13') straight = true;   // ace high
+      }
+      const royal = straight && flush && rs.join(',') === '1,10,11,12,13';
+      if (royal) return 9;
+      if (straight && flush) return 8;
+      if (counts[0] === 4) return 7;
+      if (counts[0] === 3 && counts[1] === 2) return 6;
+      if (flush) return 5;
+      if (straight) return 4;
+      if (counts[0] === 3) return 3;
+      if (counts[0] === 2 && counts[1] === 2) return 2;
+      if (counts[0] === 2){
+        const pairRank = uniq.find(v => rs.filter(x => x === v).length === 2);
+        if (pairRank === 1 || pairRank >= 11) return 1;
+      }
+      return 0;
+    }
+    function deal(){
+      if (state === 'draw'){
+        // draw: replace what is not held
+        for (let i = 0; i < 5; i++) if (!held[i]) hand[i] = deck.pop();
+        const tier = evaluate(hand);
+        const payout = tier ? PAY[tier] * (bet / 10) * 10 : 0;
+        if (payout) api.bank.add(payout);
+        msg = NAMES[tier] + (payout ? ' — paid ' + payout : '');
+        state = 'done';
+        api.setScore(Math.max(0, api.bank.get() - start));
+        if (rounds >= CASINO_ROUNDS){ msg += '  ·  session over'; api.end(); }
+        return;
+      }
+      if (rounds >= CASINO_ROUNDS){ msg = 'session over — press R'; return; }
+      if (api.bank.get() < bet){ api.bank.set(CHIPS_START); msg = 'top-up: back to ' + CHIPS_START; }
+      api.bank.add(-bet);
+      rounds++;
+      if (!deck || deck.length < 12) deck = newDeck();
+      hand = [deck.pop(), deck.pop(), deck.pop(), deck.pop(), deck.pop()];
+      held = [false,false,false,false,false];
+      state = 'draw';
+      msg = 'hold cards (1-5), then space';
+    }
+    function key(k, down){
+      if (!down) return;
+      if (k === ' ' || k === 'enter') deal();
+      if (/^[1-5]$/.test(k) && state === 'draw'){ const i = +k - 1; held[i] = !held[i]; }
+      if (k === 'r' && state === 'done'){ const b = api.bank.get(); reset(); api.bank.set(b); }
+    }
+    function tap(x, y){
+      const geo = cardGeo();
+      if (state === 'draw' && y > geo.y && y < geo.y + geo.h){
+        const i = Math.floor((x - geo.x) / (geo.w + geo.gap));
+        if (i >= 0 && i < 5){ held[i] = !held[i]; return; }
+      }
+      deal();
+    }
+    function cardGeo(){
+      const w = Math.min(96, api.w * 0.15), h = w * 1.45, gap = 12;
+      const total = w * 5 + gap * 4;
+      return { w: w, h: h, gap: gap, x: (api.w - total)/2, y: api.h * 0.3 };
+    }
+    function draw(){
+      const ctx = api.ctx;
+      gcClear(ctx, api.w, api.h);
+      const geo = cardGeo();
+      for (let i = 0; i < 5; i++){
+        const x = geo.x + i * (geo.w + geo.gap);
+        if (hand[i]) drawCard(ctx, x, geo.y, geo.w, geo.h, hand[i], true);
+        else { gcRound(ctx, x, geo.y, geo.w, geo.h, 7); ctx.fillStyle = ARCPAL.stone; ctx.fill(); }
+        gcText(ctx, String(i + 1), x + geo.w/2, geo.y + geo.h + 16, 13, held[i] ? ARCPAL.d : ARCPAL.dim);
+        if (held[i]){
+          ctx.strokeStyle = ARCPAL.d; ctx.lineWidth = 3;
+          gcRound(ctx, x - 3, geo.y - 3, geo.w + 6, geo.h + 6, 9); ctx.stroke();
+          gcText(ctx, 'HOLD', x + geo.w/2, geo.y - 14, 12, ARCPAL.d);
+        }
+      }
+      gcText(ctx, msg, api.w/2, api.h * 0.76, 15, ARCPAL.fg);
+      gcText(ctx, 'hand ' + Math.min(rounds, CASINO_ROUNDS) + '/' + CASINO_ROUNDS + ' · bet ' + bet + ' · chips ' + api.bank.get(), api.w/2, api.h - 18, 13, ARCPAL.dim);
+    }
+    return { reset, draw, tick(){}, key, tap };
+  } });
+
+/* -------------------------- Higher or Lower -------------------------- */
+game({ id:'highlow', name:'Higher or Lower', icon:'🃏', cat:'Casino', score:'winnings',
+  blurb:'Call the next card. Right answers grow your streak.', help:'← lower · → higher · Space deal',
+  make(api){
+    let deck, cur, next, streak, bet, rounds, startChips, msg, state;
+    function reset(){
+      deck = newDeck();
+      cur = null; next = null; streak = 0; bet = 10; rounds = 0;
+      startChips = api.bank.get(); msg = 'Press space to start'; state = 'idle'; api.setScore(0);
+    }
+    const val = c => c.r;
+    function start(){
+      if (rounds >= CASINO_ROUNDS){ msg = 'session over — press R'; return; }
+      if (api.bank.get() < bet){ api.bank.set(CHIPS_START); msg = 'top-up: back to ' + CHIPS_START; }
+      api.bank.add(-bet);
+      rounds++;
+      if (!deck || deck.length < 3) deck = newDeck();
+      cur = deck.pop();
+      next = deck.pop();
+      state = 'guess'; streak = 0;
+      msg = 'higher or lower?';
+    }
+    function call(dir){
+      if (state !== 'guess') return;
+      const a = val(cur), b = val(next);
+      const correct = dir === 'high' ? b > a : b < a;
+      const tie = a === b;
+      if (correct || tie){
+        streak++;
+        const payout = Math.round(bet * (1 + streak * 0.4));
+        api.bank.add(payout);
+        msg = (tie ? 'tie — ' : 'right! ') + b + ' · won ' + payout;
+        cur = next; next = deck.pop() || (deck = newDeck(), deck.pop());
+      } else {
+        msg = 'no — it was ' + b;
+        state = 'done';
+      }
+      api.setScore(Math.max(0, api.bank.get() - startChips));
+      if (rounds >= CASINO_ROUNDS){ msg += '  ·  session over'; api.end(); }
+    }
+    function key(k, down){
+      if (!down) return;
+      if (k === ' ' || k === 'enter'){
+        if (state === 'idle' || state === 'done') start();
+        return;
+      }
+      if (k === 'arrowleft' || k === 'a') call('low');
+      if (k === 'arrowright' || k === 'd') call('high');
+      if (k === 'r' && state === 'done'){ const b = api.bank.get(); reset(); api.bank.set(b); }
+    }
+    function tap(x){ if (state !== 'guess'){ start(); return; } call(x > api.w/2 ? 'high' : 'low'); }
+    function draw(){
+      const ctx = api.ctx;
+      gcClear(ctx, api.w, api.h);
+      const w = Math.min(110, api.w * 0.17), h = w * 1.45;
+      if (cur) drawCard(ctx, api.w * 0.5 - w - 24, api.h * 0.3, w, h, cur, true);
+      gcRound(ctx, api.w * 0.5 + 24, api.h * 0.3, w, h, 7);
+      ctx.fillStyle = ARCPAL.stone; ctx.fill();
+      gcText(ctx, state === 'guess' ? '?' : (next ? CARD_RANKS[next.r-1] : '?'), api.w * 0.5 + 24 + w/2, api.h * 0.3 + h/2, h * 0.3, ARCPAL.fg);
+      gcText(ctx, '← lower        higher →', api.w/2, api.h * 0.78, 16, ARCPAL.a);
+      gcText(ctx, msg, api.w/2, api.h * 0.62, 15, ARCPAL.fg);
+      gcText(ctx, 'streak ' + streak + ' · round ' + Math.min(rounds, CASINO_ROUNDS) + '/' + CASINO_ROUNDS + ' · chips ' + api.bank.get(), api.w/2, api.h - 18, 13, ARCPAL.dim);
+    }
+    return { reset, draw, tick(){}, key, tap };
+  } });
+
 /* ------------------------------- Arcade ----------------------------- */
 APPS.arcade = {
   name: 'Arcade', icon: '🎮', w: 1000, h: 700,
@@ -5507,6 +6374,7 @@ APPS.arcade = {
           <div class="chipbar" id="acCats"></div>
           <span class="muted" style="font-size:12px;margin-left:auto" id="acInfo"></span>
         </div>
+        <div id="acNote" class="arc-note" style="display:none"></div>
         <div class="arc-grid" id="acGrid"></div>
       </div>
       <div id="acPlay" style="display:none;flex-direction:column;flex:1;min-height:0">
@@ -5547,6 +6415,15 @@ APPS.arcade = {
       const list = ARCADE_GAMES.filter(g => (cat === 'All' || g.cat === cat) &&
         (!q || g.name.toLowerCase().includes(q) || g.cat.toLowerCase().includes(q) || g.blurb.toLowerCase().includes(q)));
       info.textContent = list.length + (list.length === 1 ? ' game' : ' games') + ' of ' + ARCADE_GAMES.length;
+      const note = $('#acNote', body);
+      if (cat === 'Casino'){
+        note.style.display = 'flex';
+        note.innerHTML = '';
+        note.append(
+          el('div', {}, el('b', {}, 'Play money only. '),
+            'You have ' + chipsGet() + ' virtual chips. There is nothing to buy, deposit or cash out — it is a simulation.'),
+          el('button', { class: 'btn', onclick: () => { chipsSet(CHIPS_START); toast('Arcade', 'Chips reset to ' + CHIPS_START); paintMenu(); } }, 'Reset chips'));
+      } else note.style.display = 'none';
       if (!list.length){
         grid.append(el('div', { class: 'muted', style: 'font-size:12.5px;padding:10px' }, 'Nothing matches those words.'));
         return;
@@ -5576,6 +6453,7 @@ APPS.arcade = {
     function makeApi(){
       const api = {
         ctx, w: 1, h: 1, score: 0, over: false, paused: false, best: 0,
+        bank: chips,
         setScore(n){ api.score = Math.max(0, Math.round(n)); scoreEl.textContent = String(api.score); },
         add(n){ api.setScore(api.score + n); },
         end(){ if (api.over) return; api.over = true; finish(); },
