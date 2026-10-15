@@ -129,35 +129,61 @@ RESP=$(curl -sSL -X POST "$API/releases" \
   -H "Authorization: Bearer $TOKEN" -H "Accept: application/vnd.github+json" \
   -d "{\"tag_name\":\"v3.0\",\"target_commitish\":\"main\",\"name\":\"uOS 3.0\",\"body\":$BODY,\"draft\":false,\"prerelease\":false}")
 
-# if a v3.0 release already exists, update it instead of failing
-if ! printf '%s' "$RESP" | grep -q '"upload_url"'; then
-  case "$RESP" in
-    *already_exists*)
-      echo "· release v3.0 already exists — updating it"
-      RESP=$(curl -sSL -X PATCH "$API/releases/tags/v3.0" \
-        -H "Authorization: Bearer $TOKEN" -H "Accept: application/vnd.github+json" \
-        -d "{\"name\":\"uOS 3.0\",\"body\":$BODY,\"draft\":false,\"prerelease\":false}") ;;
-  esac
-fi
+AUTH=(-H "Authorization: Bearer $TOKEN" -H "Accept: application/vnd.github+json")
 
-# stdout only — never merge stderr in, or a message would end up in the URL
-pull(){ printf '%s' "$RESP" | python3 -c 'import json,sys
+# read one field out of a JSON blob (stdout only — never merge stderr in,
+# or an error message could end up being used as a URL)
+jsonval(){ printf '%s' "$1" | python3 -c 'import json,sys
 try:
   d = json.load(sys.stdin)
 except Exception:
   sys.exit(0)
-print(d.get(sys.argv[1]) or "")' "$1"; }
+if isinstance(d, dict):
+  print(d.get(sys.argv[1]) or "")' "$2"; }
 
-UPLOAD=$(pull upload_url)
+# a second run must not fail — find the existing release and update it.
+# PATCH by tag 404s for this endpoint, so look up the numeric id and use that.
+if ! printf '%s' "$RESP" | grep -q '"upload_url"'; then
+  case "$RESP" in
+    *already_exists*)
+      echo "· release v3.0 already exists — updating it"
+      EXIST=$(curl -sSL "${AUTH[@]}" "$API/releases/tags/v3.0")
+      RID=$(jsonval "$EXIST" id)
+      if [ -n "$RID" ]; then
+        RESP=$(curl -sSL -X PATCH "${AUTH[@]}" "$API/releases/$RID" \
+          -d "{\"name\":\"uOS 3.0\",\"body\":$BODY,\"draft\":false,\"prerelease\":false}")
+      else
+        echo "! could not find the existing release to update" >&2
+      fi ;;
+  esac
+fi
+
+UPLOAD=$(jsonval "$RESP" upload_url)
 UPLOAD="${UPLOAD%%\{*}"
-REL_URL=$(pull html_url)
-MSG=$(pull message)
+REL_ID=$(jsonval "$RESP" id)
+REL_URL=$(jsonval "$RESP" html_url)
+MSG=$(jsonval "$RESP" message)
 
 if [ -n "$UPLOAD" ]; then
+  # replace the asset if it's already attached, so re-runs stay idempotent
+  if [ -n "$REL_ID" ]; then
+    OLD=$(curl -sSL "${AUTH[@]}" "$API/releases/$REL_ID/assets" | ZIPNAME="$ZIP" python3 -c 'import json,os,sys
+try:
+  d = json.load(sys.stdin)
+except Exception:
+  sys.exit(0)
+if isinstance(d, list):
+  n = os.environ["ZIPNAME"]
+  i = next((a["id"] for a in d if a.get("name") == n), "")
+  print(i)' 2>/dev/null || true)
+    if [ -n "$OLD" ]; then
+      echo "· replacing the existing $ZIP asset"
+      curl -sSL -X DELETE "${AUTH[@]}" "$API/releases/assets/$OLD" >/dev/null
+    fi
+  fi
   echo "· uploading $ZIP"
-  UP=$(curl -sSL -X POST "$UPLOAD?name=$ZIP" \
-    -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/zip" \
-    --data-binary "@$ZIP")
+  UP=$(curl -sSL -X POST "${AUTH[@]}" -H "Content-Type: application/zip" \
+    --data-binary "@$ZIP" "$UPLOAD?name=$ZIP")
   case "$UP" in
     *'"state":"uploaded"'*|*'"size"'*) echo "· asset uploaded" ;;
     *) echo "! asset upload said: $(printf '%s' "$UP" | head -c 160)" ;;
