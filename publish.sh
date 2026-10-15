@@ -4,11 +4,20 @@
 # attaches the zip.
 #
 #   usage:  bash publish.sh <your-username>/uos
-#       or: GH_TOKEN=github_pat_... bash publish.sh <your-username>/uos
 #
-# The token is read from stdin (hidden) or from $GH_TOKEN. It is passed to git
-# through an in-memory credential helper, never in a URL, never in the remote
-# and never in your shell history.
+# The token is looked up in this order:
+#   1. $GH_TOKEN                       (one-off override)
+#   2. the macOS Keychain              (set up once — see below)
+#   3. ~/.git-credentials              (Linux git credential-store)
+#   4. an interactive prompt           (hidden input)
+#
+# It is passed to git through an in-memory credential helper — never in a URL,
+# never in the remote, never in your shell history.
+#
+# ONE-TIME SETUP so you never paste a token again (macOS):
+#     git config --global credential.helper osxkeychain
+#     # then run the script once and paste the token when GitHub asks;
+#     # the Keychain remembers it and every run after that needs no token.
 # ---------------------------------------------------------------------------
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -25,14 +34,34 @@ if [ ! -f "$ZIP" ]; then
   zip -q -9 "$ZIP" uOS.html README.md RELEASE_NOTES.md
 fi
 
-# ---------------------------------------------------------------- the token
+# --------------------------------------------------------- find the token
 TOKEN="${GH_TOKEN:-}"
+
+if [ -z "$TOKEN" ] && command -v security >/dev/null 2>&1; then
+  # macOS Keychain (what git-credential-osxkeychain stores)
+  TOKEN="$(security find-internet-password -s github.com -w 2>/dev/null || true)"
+  [ -n "$TOKEN" ] && echo "· token found in the macOS Keychain"
+fi
+
+if [ -z "$TOKEN" ] && [ -f "$HOME/.git-credentials" ]; then
+  TOKEN="$(sed -n 's|^https://[^:]*:\([^@]*\)@github\.com$|\1|p' "$HOME/.git-credentials" | head -n 1)"
+  [ -n "$TOKEN" ] && echo "· token found in ~/.git-credentials"
+fi
+
 if [ -z "$TOKEN" ]; then
-  printf 'Paste a FRESH GitHub token (input hidden, press Enter): '
+  printf 'Paste a GitHub token (input hidden, press Enter): '
   read -rs TOKEN || true
   echo
 fi
 TOKEN="$(printf '%s' "$TOKEN" | tr -d '[:space:]')"
+
+# ---------------------------------------------------------- sanity check
+if [ -z "$TOKEN" ]; then
+  echo "! no token available." >&2
+  echo "  Either run once with GH_TOKEN=github_pat_... or set up the Keychain:" >&2
+  echo "      git config --global credential.helper osxkeychain" >&2
+  exit 1
+fi
 
 case "$TOKEN" in
   ghp_*)            NEED=40 ;;
@@ -40,44 +69,40 @@ case "$TOKEN" in
   gho_*|ghs_*|ghu_*) NEED=40 ;;
   *)                NEED=0  ;;
 esac
-
 echo "· token length: ${#TOKEN} (a ghp_… token is 40, a github_pat_… token is 93)"
-
 if [ "$NEED" = "0" ]; then
   echo "! that does not look like a GitHub token — it should start with ghp_ or github_pat_." >&2
-  echo "  Create one at github.com/settings/personal-access-tokens" >&2
   exit 1
 fi
 if [ "${#TOKEN}" -ne "$NEED" ]; then
   echo "! wrong length: this token is ${#TOKEN} characters, but it should be exactly $NEED." >&2
-  echo "  The paste was probably cut short or picked up an extra character." >&2
-  echo "  On macOS you can check the clipboard with:" >&2
-  echo "      pbpaste | tr -d '[:space:]' | wc -c" >&2
+  echo "  Check the clipboard with:  pbpaste | tr -d '[:space:]' | wc -c" >&2
   exit 1
 fi
 
-# ------------------------------------------------------------------ pushing
 export GIT_TOKEN="$TOKEN"
 CRED='!f() { echo username=x-access-token; echo password="$GIT_TOKEN"; }; f'
+gpush(){ git -c credential.helper="$CRED" "$@"; }
 
 git remote remove origin 2>/dev/null || true
 git remote add origin "https://github.com/$REPO.git"
 
+# --------------------------------------------------------------- push it
 echo "· pushing main"
-PUSH_OUT="$(git -c credential.helper="$CRED" push -u origin main 2>&1)" && PUSH_RC=0 || PUSH_RC=$?
+PUSH_OUT="$(gpush push -u origin main 2>&1)" && PUSH_RC=0 || PUSH_RC=$?
 if [ "$PUSH_RC" -ne 0 ]; then
   printf '%s\n' "$PUSH_OUT"
   case "$PUSH_OUT" in
     *"Authentication failed"*|*"Invalid username or token"*|*"could not read Username"*|*"password authentication"*)
       echo >&2
       echo "! GitHub rejected the token — authentication failed, nothing was pushed." >&2
-      echo "  Check the token is valid, not expired, and has Contents: Read and write on $REPO." >&2
+      echo "  Check it is valid, not expired, and has Contents: Read and write on $REPO." >&2
       exit 1 ;;
   esac
   echo "! push rejected — the remote has commits you don't. Merging them in…"
-  git -c credential.helper="$CRED" fetch origin main
+  gpush fetch origin main
   if git merge --allow-unrelated-histories -X ours -m "merge remote history" FETCH_HEAD; then
-    git -c credential.helper="$CRED" push -u origin main
+    gpush push -u origin main
   else
     echo >&2
     echo "! automatic merge failed. Resolve it by hand:" >&2
@@ -87,12 +112,12 @@ if [ "$PUSH_RC" -ne 0 ]; then
   fi
 fi
 
-# ----------------------------------------------------------------- tag it
+# ---------------------------------------------------------------- tag it
 echo "· tagging v3.0"
 git tag -f v3.0
-git -c credential.helper="$CRED" push -f origin v3.0
+gpush push -f origin v3.0
 
-# ------------------------------------------------------------ the release
+# ----------------------------------------------------------- the release
 echo "· creating the release"
 BODY=$(python3 -c 'import json; print(json.dumps(open("RELEASE_NOTES.md").read()))')
 RESP=$(curl -sS -X POST "https://api.github.com/repos/$REPO/releases" \

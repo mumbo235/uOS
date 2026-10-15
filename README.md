@@ -49,6 +49,25 @@ python3 -m http.server 8000
 # then visit http://localhost:8000/uOS.html
 ```
 
+## Publishing a release
+
+```bash
+bash publish.sh <your-username>/uos
+```
+
+Pushes `main`, tags `v3.0`, creates the GitHub release from `RELEASE_NOTES.md`
+and uploads `uos-3.0.zip`.
+
+**One-time setup so it never asks for a token again (macOS):**
+
+```bash
+git config --global credential.helper osxkeychain
+```
+
+Run the script once and paste the token when GitHub asks — the Keychain
+remembers it, and `bash publish.sh <user>/uos` needs no token after that.
+(On Linux use `git config --global credential.helper store` once instead.)
+
 ## Notes
 
 - Everything is stored in your browser's `localStorage` — files, notes, widgets, settings.
