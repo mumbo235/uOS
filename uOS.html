@@ -4244,7 +4244,7 @@ const WIDGET_TYPES = {
   } },
   system: { name: 'System stats', icon: '📊', w: 252, h: 176, render(b){
     const mk = (label, cls) => { const v = el('b', {}, '—'); b.append(el('div', { class: 'w-sys-row' }, el('span', { class: 'muted' }, label), v)); return v; };
-    b.append(el('div', { class: 'w-sys-row' }, el('span', { class: 'muted' }, 'uOS'), el('b', {}, '3.0')));
+    b.append(el('div', { class: 'w-sys-row' }, el('span', { class: 'muted' }, 'uOS'), el('b', {}, UOS_VERSION)));
     const up = mk('Uptime'); up.className = 'w-sys-uptime';
     const wv = mk('Open windows'); wv.className = 'w-sys-windows';
     mk('Apps installed').textContent = String(Object.keys(APPS).length);

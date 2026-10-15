@@ -55,8 +55,10 @@ python3 -m http.server 8000
 bash publish.sh <your-username>/uOS
 ```
 
-Pushes `main`, tags `v3.0`, creates the GitHub release from `RELEASE_NOTES.md`
-and uploads a freshly built `uos-3.0.zip`. Re-running it is safe: it updates the
+Pushes `main`, tags `v<UOS_VERSION>`, creates the GitHub release from
+`RELEASE_NOTES.md` and uploads a freshly built `uos-<UOS_VERSION>.zip`. The version is
+read straight out of `uOS.html`, so **bump `UOS_VERSION` there to ship a new version** —
+it tags and names everything from that one line. Re-running it is safe: it updates the
 existing release and replaces the asset instead of failing.
 
 **One-time setup so it never asks for a token again** — pick your platform:
