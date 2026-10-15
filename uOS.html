@@ -203,6 +203,18 @@ button{font-family:inherit;color:inherit;cursor:pointer;border:none;background:n
 /* ---- command palette ---- */
 #palette{position:fixed;inset:0;z-index:960;display:none;align-items:flex-start;justify-content:center;padding:12vh 16px 16px;background:rgba(6,9,14,.55)}
 #palette.open{display:flex}
+/* ---- touch mode: bigger targets for fingers ---- */
+body.touch{--tb-h:56px}
+body.touch .traybtn{height:46px;min-width:46px;justify-content:center;padding:0 12px}
+body.touch .pin,body.touch .taskitem{min-width:50px;padding:0 14px}
+body.touch .pin{width:56px}
+body.touch .win-ctrls button{width:42px;height:34px}
+body.touch .btn{padding:10px 15px;font-size:13px}
+body.touch .dicon{width:100px}
+body.touch .rs.n,body.touch .rs.s{height:16px;left:16px;right:16px}
+body.touch .rs.e,body.touch .rs.w{width:16px;top:16px;bottom:16px}
+body.touch .tb-sep{margin:0 10px}
+body.touch button,body.touch .pin,body.touch .traybtn,body.touch .dicon{-webkit-tap-highlight-color:transparent;touch-action:manipulation}
 #palette .pal-box{width:100%;max-width:620px;background:var(--surface);backdrop-filter:blur(34px) saturate(160%);-webkit-backdrop-filter:blur(34px) saturate(160%);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow);overflow:hidden}
 #palInput{width:100%;border:0;border-bottom:1px solid var(--border);background:none;color:var(--text);font-size:16px;padding:16px 18px;outline:none;font-family:inherit}
 #palInput::placeholder{color:var(--text-dim)}
@@ -555,6 +567,8 @@ video.cam{width:100%;border-radius:10px;background:#000;display:block}
 .toast b{color:var(--accent)}
 .toast-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
 .toast-actions .btn{padding:5px 10px;font-size:11.5px}
+/* ---- AI assistant privacy strip ---- */
+.ai-privacy{display:flex;align-items:center;gap:10px;padding:7px 12px;border-top:1px solid var(--border);background:var(--surface-2);font-size:11.5px;color:var(--text-dim);line-height:1.45}
 
 /* ============ CUSTOMISATION ============ */
 body.no-acrylic .window,body.no-acrylic #taskbar,body.no-acrylic #startMenu,
@@ -1288,6 +1302,7 @@ function applyTheme(){
   b.toggle('no-desktop-icons', !settings.desktopIcons);
   b.toggle('square', settings.round === false);
   b.toggle('power-saver', settings.powerMode === 'saver');
+  b.toggle('touch', !!settings.touchMode);
   startClock();
   applyVolumes();
   /* interface font + taskbar height */
@@ -1802,6 +1817,9 @@ APPS.files = {
           render();
           showContext(e.clientX, e.clientY, [
             { label: 'Open', act: () => open(it) },
+            { label: 'Open with…', act: () => pickOpenWith(it.path) },
+            { label: 'Set default app…', act: () => pickDefaultFor(it.path) },
+            { sep: true },
             { label: 'Rename', act: () => {
                 const nn = prompt('New name:', it.name); if (!nn) return;
                 const np = (cwd === '/' ? '' : cwd + '/') + nn;
@@ -2260,6 +2278,7 @@ APPS.settings = {
           row('Night light', sw('nightLight'), 'Warm tint to reduce eye strain'),
           row('High contrast', sw('highContrast'), 'Stronger borders and text'),
           row('UI density', chips('density', [['comfy', 'Comfortable'], ['compact', 'Compact']])),
+          row('Touch mode', sw('touchMode'), 'Bigger taskbar, buttons, icons and resize handles for fingers'),
           row('Cursor size', chips('cursor', [['default', 'Default'], ['large', 'Large']]))
         ),
         head('Desktop'),
@@ -4013,6 +4032,7 @@ APPS.ai = {
           <button class="btn" id="aiKeyBtn">Settings</button>
         </div>
         <div class="ai-msgs" id="aiMsgs"></div>
+        <div class="ai-privacy" id="aiPrivacy"></div>
         <div class="ai-input">
           <textarea id="aiIn" placeholder="Message uOS Assistant…   (Enter to send · Shift+Enter for a new line)" spellcheck="false"></textarea>
           <button class="btn primary" id="aiSend">Send</button>
@@ -4020,6 +4040,29 @@ APPS.ai = {
       </div>`;
     const msgs = $('#aiMsgs', body), input = $('#aiIn', body), sendBtn = $('#aiSend', body), status = $('#aiStatus', body), modelSel = $('#aiModel', body);
     $('#aiLogo', body).innerHTML = iconHTML('ai', '✨');
+    /* what leaves this device, stated plainly */
+    const privacyEl = $('#aiPrivacy', body);
+    function paintPrivacy(){
+      let host = AI_BASE;
+      try { host = new URL(AI_BASE).host; } catch(e){}
+      const custom = !!AI_KEY;
+      privacyEl.innerHTML = '';
+      const swEl = el('button', { class: 'switch' + (settings.aiCloud ? ' on' : ''), title: 'Allow sending prompts' }, el('i'));
+      swEl.onclick = () => {
+        settings.aiCloud = !settings.aiCloud;
+        saveSettings();
+        swEl.classList.toggle('on', settings.aiCloud);
+        paintPrivacy();
+      };
+      privacyEl.append(
+        el('span', { style: 'flex:1;min-width:0' },
+          settings.aiCloud
+            ? (custom ? 'Prompts go to your own provider (' + host + ').'
+                      : 'Prompts are sent to a third-party service (' + host + ') — it needs no key. Add your own provider above if you would rather not.')
+            : 'Cloud AI is off — nothing leaves this device.'),
+        swEl);
+    }
+    paintPrivacy();
     let history = [], busy = false;
     const setStatus = t => { status.textContent = t; };
 
@@ -4146,6 +4189,10 @@ APPS.ai = {
       if (busy) return;
       const text = input.value.trim();
       if (!text) return;
+      if (!settings.aiCloud){
+        bubble('assistant', '<p>Cloud AI is switched off, so nothing was sent. Turn it back on with the switch above the message box.</p>');
+        return;
+      }
       const lim = aiCheckLimit();
       if (!lim.ok){
         bubble('assistant', '<p style="color:#e81123">⏳ ' + lim.msg + '</p>');
@@ -4395,9 +4442,44 @@ APPS.run = {
 };
 
 /* ---------------------------- open a file --------------------------- */
+/* ------------------------ file associations -------------------------
+   Which app opens which extension. Settings > "Open with" can change it. */
+const ASSOC_DEFAULT = {
+  html: 'htmlview', htm: 'htmlview', xhtml: 'htmlview', svg: 'viewer',
+  txt: 'notepad', log: 'notepad', md: 'notepad', csv: 'notepad',
+  js: 'code', json: 'code', css: 'code',
+  png: 'viewer', jpg: 'viewer', jpeg: 'viewer', gif: 'viewer', webp: 'viewer',
+  mp3: 'media', wav: 'media', ogg: 'media', mp4: 'media', webm: 'media'
+};
+const ASSOC_CHOICES = ['notepad', 'code', 'htmlview', 'viewer', 'media'];
+function extOf(path){ const m = String(path).match(/\.([a-z0-9]+)$/i); return m ? m[1].toLowerCase() : ''; }
+function assocMap(){ return Object.assign({}, ASSOC_DEFAULT, store.get('assoc', {}) || {}); }
+function setAssoc(ext, appId){ const m = store.get('assoc', {}) || {}; m[ext] = appId; store.set('assoc', m); }
+function appForPath(path){
+  const ext = extOf(path);
+  return ext ? (assocMap()[ext] || '') : '';
+}
+/* two-step pickers, used by the Files app */
+function pickOpenWith(path){
+  const a = appForPath(path);
+  showContext(showContext.lastX || 200, showContext.lastY || 200, ASSOC_CHOICES.filter(id => APPS[id]).map(id => ({
+    label: (id === a ? '✓ ' : '') + APPS[id].name, act: () => openApp(id, { file: path })
+  })));
+}
+function pickDefaultFor(path){
+  const ext = extOf(path);
+  if (!ext) return toast('Files', 'That file has no extension');
+  showContext(showContext.lastX || 200, showContext.lastY || 200, ASSOC_CHOICES.filter(id => APPS[id]).map(id => ({
+    label: (appForPath(path) === id ? '✓ ' : '') + APPS[id].name,
+    act: () => { setAssoc(ext, id); toast('Files', '.' + ext + ' now opens with ' + APPS[id].name); }
+  })));
+}
 function openPath(path){
   const name = String(path).split('/').pop();
   const f = FS[path] || {};
+  /* an assigned app wins; otherwise fall back to the built-in rules */
+  const chosen = appForPath(path);
+  if (chosen && APPS[chosen]) return openApp(chosen, { file: path });
   if (/^data:image/.test(f.content || '') || /\.(png|jpe?g|gif|webp|svg)$/i.test(name)) return openApp('viewer', { file: path });
   if (/\.(mp3|wav|ogg|mp4|webm)$/i.test(name)) return openApp('media', { });
   if (/\.(html?|xhtml)$/i.test(name)) return openApp('htmlview', { file: path });
@@ -7284,6 +7366,7 @@ function addRecent(id){
 
 /* ---------------------------- context menu -------------------------- */
 function showContext(x, y, items){
+  showContext.lastX = x; showContext.lastY = y;      // so a follow-up menu can reuse it
   const m = $('#ctxMenu');
   m.innerHTML = '';
   items.filter(Boolean).forEach(it => {
@@ -8194,6 +8277,12 @@ document.addEventListener('keydown', function(e){
 /* ------------------------------ GO ---------------------------------- */
 installLogo();
 installSystemIcons();
+/* first run on a touch device: switch touch mode on for them, once */
+if (!store.get('touchAsked', false)){
+  if ('ontouchstart' in window || (navigator.maxTouchPoints || 0) > 0) settings.touchMode = true;
+  store.set('touchAsked', true);
+  store.set('settings', settings);
+}
 applyTheme();
 renderPinned();
 /* one-time: make sure the Recycle Bin sits at the top of the desktop.
