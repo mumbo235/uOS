@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
-# Publishes uOS to GitHub: pushes main, tags v3.0, creates a release and
-# attaches the zip.
+# Publishes uOS to GitHub: pushes main, tags v<UOS_VERSION>, creates a release
+# and attaches the zip. The version is read from uOS.html, so bump UOS_VERSION
+# there and re-run to publish a new version (this overwrites nothing).
 #
 #   usage:  bash publish.sh <your-username>/uOS
 #
@@ -26,12 +27,22 @@ cd "$(dirname "$0")"
 
 REPO="${1:-}"
 if [ -z "$REPO" ]; then
-  echo "usage: bash publish.sh <your-username>/uos" >&2
+  echo "usage: bash publish.sh <your-username>/uOS" >&2
   exit 1
 fi
 
+# the version comes straight out of uOS.html, so tagging, the zip name and the
+# release always follow the build (bump UOS_VERSION there to ship a new one)
+VERSION="$(grep -oE "UOS_VERSION[[:space:]]*=[[:space:]]*'[^']+'" uOS.html | head -n1 | sed -E "s/.*'([^']+)'.*/\1/")"
+if [ -z "$VERSION" ]; then
+  echo "! could not read UOS_VERSION from uOS.html" >&2
+  exit 1
+fi
+TAG="v$VERSION"
+echo "· version $VERSION  (tag $TAG)"
+
 # always rebuild, so the release asset always matches the current source
-ZIP="uos-3.0.zip"
+ZIP="uos-$VERSION.zip"
 echo "· building $ZIP"
 rm -f "$ZIP"
 zip -q -9 "$ZIP" uOS.html README.md RELEASE_NOTES.md
@@ -118,9 +129,9 @@ if [ "$PUSH_RC" -ne 0 ]; then
 fi
 
 # ---------------------------------------------------------------- tag it
-echo "· tagging v3.0"
-git tag -f v3.0
-gpush push -f origin v3.0
+echo "· tagging $TAG"
+git tag -f "$TAG"
+gpush push -f origin "$TAG"
 
 # ----------------------------------------------------------- the release
 echo "· creating the release"
@@ -130,7 +141,7 @@ API="https://api.github.com/repos/$REPO"
 # -L so a renamed repo (GitHub redirects the old name) still resolves.
 RESP=$(curl -sSL -X POST "$API/releases" \
   -H "Authorization: Bearer $TOKEN" -H "Accept: application/vnd.github+json" \
-  -d "{\"tag_name\":\"v3.0\",\"target_commitish\":\"main\",\"name\":\"uOS 3.0\",\"body\":$BODY,\"draft\":false,\"prerelease\":false}")
+  -d "{\"tag_name\":\"$TAG\",\"target_commitish\":\"main\",\"name\":\"uOS $VERSION\",\"body\":$BODY,\"draft\":false,\"prerelease\":false}")
 
 AUTH=(-H "Authorization: Bearer $TOKEN" -H "Accept: application/vnd.github+json")
 
@@ -149,12 +160,12 @@ if isinstance(d, dict):
 if ! printf '%s' "$RESP" | grep -q '"upload_url"'; then
   case "$RESP" in
     *already_exists*)
-      echo "· release v3.0 already exists — updating it"
-      EXIST=$(curl -sSL "${AUTH[@]}" "$API/releases/tags/v3.0")
+      echo "· release $TAG already exists — updating it"
+      EXIST=$(curl -sSL "${AUTH[@]}" "$API/releases/tags/$TAG")
       RID=$(jsonval "$EXIST" id)
       if [ -n "$RID" ]; then
         RESP=$(curl -sSL -X PATCH "${AUTH[@]}" "$API/releases/$RID" \
-          -d "{\"name\":\"uOS 3.0\",\"body\":$BODY,\"draft\":false,\"prerelease\":false}")
+          -d "{\"name\":\"uOS $VERSION\",\"body\":$BODY,\"draft\":false,\"prerelease\":false}")
       else
         echo "! could not find the existing release to update" >&2
       fi ;;

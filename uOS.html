@@ -824,6 +824,133 @@ const store = {
   get(k, d){ try { const v = localStorage.getItem('uos.' + k); return v === null ? d : JSON.parse(v); } catch(e){ return d; } },
   set(k, v){ try { localStorage.setItem('uos.' + k, JSON.stringify(v)); } catch(e){} }
 };
+
+/* =====================================================================
+   VERSION + UPDATE CHECKS
+   One source of truth: publish.sh reads this constant, so tagging and the
+   zip name always follow the build. Bump this when you ship.
+   ===================================================================== */
+const UOS_VERSION = '3.1';
+const UOS_REPO = 'mumbo235/uOS';
+const UOS_RELEASES = 'https://github.com/' + UOS_REPO + '/releases';
+
+function versionParts(v){ return String(v).replace(/^v/i, '').split('.').map(n => parseInt(n, 10) || 0); }
+function versionNewer(candidate, current){
+  const a = versionParts(candidate), b = versionParts(current);
+  for (let i = 0; i < Math.max(a.length, b.length); i++){
+    const x = a[i] || 0, y = b[i] || 0;
+    if (x !== y) return x > y;
+  }
+  return false;
+}
+async function fetchLatestRelease(){
+  const r = await fetch('https://api.github.com/repos/' + UOS_REPO + '/releases/latest', {
+    headers: { Accept: 'application/vnd.github+json' }, cache: 'no-store'
+  });
+  if (!r.ok) throw new Error('GitHub returned ' + r.status);
+  const d = await r.json();
+  return { tag: d.tag_name || '', name: d.name || '', url: d.html_url || UOS_RELEASES, notes: d.body || '' };
+}
+/* result of the last check, for the About / Settings screens */
+function updateStatus(){
+  const at = store.get('updateCheckedAt', 0);
+  if (!at) return { text: 'Not checked yet', newer: false };
+  const when = new Date(at).toLocaleString();
+  const err = store.get('updateError', '');
+  if (err) return { text: 'Could not check (' + err + ') · ' + when, newer: false };
+  const tag = store.get('updateLatest', '');
+  if (!tag) return { text: 'Last checked ' + when, newer: false };
+  if (versionNewer(tag, UOS_VERSION)) return { text: 'Update available: ' + tag + ' · checked ' + when, newer: true, tag: tag, url: UOS_RELEASES + '/tag/' + tag };
+  return { text: 'Up to date — you have ' + UOS_VERSION + ' · checked ' + when, newer: false, tag: tag };
+}
+async function checkForUpdate(opts){
+  const manual = !!(opts && opts.manual);
+  try {
+    const latest = await fetchLatestRelease();
+    store.set('updateCheckedAt', Date.now());
+    store.set('updateError', '');
+    store.set('updateLatest', latest.tag);
+    store.set('updateURL', latest.url);
+    const newer = versionNewer(latest.tag, UOS_VERSION);
+    if (newer){
+      const seen = 'updateSeen-' + latest.tag;
+      if (manual || !store.get(seen, false)){
+        store.set(seen, true);
+        toast('Update available', 'uOS ' + String(latest.tag).replace(/^v/i, '') + ' is out — you have ' + UOS_VERSION);
+      }
+      if (manual) window.open(latest.url, '_blank');
+    } else if (manual){
+      toast('Updates', 'uOS ' + UOS_VERSION + ' is the latest version');
+    }
+    return { ok: true, newer: newer, latest: latest };
+  } catch (e){
+    store.set('updateCheckedAt', Date.now());
+    store.set('updateError', String((e && e.message) || e));
+    if (manual) toast('Updates', 'Could not check — offline, or the request was blocked');
+    return { ok: false, error: String((e && e.message) || e) };
+  }
+}
+function maybeAutoCheck(){
+  if (!settings.updateCheck) return;
+  const at = store.get('updateCheckedAt', 0);
+  if (Date.now() - at < 12 * 3600 * 1000) return;      // at most twice a day
+  setTimeout(() => { checkForUpdate({}).catch(() => {}); }, 4000);
+}
+
+/* =====================================================================
+   BIG-FILE VAULT (IndexedDB)
+   localStorage only holds a few megabytes, so anything larger (a big
+   single-file app, say) is kept here instead. Contents are held as plain
+   text; nothing is uploaded anywhere.
+   ===================================================================== */
+const vault = {
+  THRESHOLD: 1200000,           // characters that still fit comfortably in localStorage
+  db: null,
+  open(){
+    if (vault.db) return Promise.resolve(vault.db);
+    return new Promise((res, rej) => {
+      if (!window.indexedDB) return rej(new Error('no IndexedDB'));
+      const rq = indexedDB.open('uosvault', 1);
+      rq.onupgradeneeded = () => { if (!rq.result.objectStoreNames.contains('files')) rq.result.createObjectStore('files'); };
+      rq.onsuccess = () => { vault.db = rq.result; res(vault.db); };
+      rq.onerror = () => rej(rq.error || new Error('indexedDB failed'));
+    });
+  },
+  put(key, text){
+    return vault.open().then(db => new Promise((res, rej) => {
+      const tx = db.transaction('files', 'readwrite');
+      tx.objectStore('files').put(text, key);
+      tx.oncomplete = () => res(true);
+      tx.onerror = () => rej(tx.error);
+    }));
+  },
+  get(key){
+    return vault.open().then(db => new Promise((res, rej) => {
+      const rq = db.transaction('files', 'readonly').objectStore('files').get(key);
+      rq.onsuccess = () => res(rq.result == null ? null : rq.result);
+      rq.onerror = () => rej(rq.error);
+    }));
+  },
+  del(key){
+    return vault.open().then(db => new Promise(res => {
+      const tx = db.transaction('files', 'readwrite');
+      tx.objectStore('files').delete(key);
+      tx.oncomplete = () => res(true);
+      tx.onerror = () => res(false);
+    })).catch(() => false);
+  },
+  keys(){
+    return vault.open().then(db => new Promise(res => {
+      const rq = db.transaction('files', 'readonly').objectStore('files').getAllKeys();
+      rq.onsuccess = () => res(rq.result || []);
+      rq.onerror = () => res([]);
+    })).catch(() => []);
+  }
+};
+/* plain helpers, matching the fsWrite / fsDelete house style */
+function vaultPut(key, text){ return vault.put(key, text); }
+function vaultGet(key){ return vault.get(key); }
+function vaultDel(key){ return vault.del(key); }
 const __liveToasts = new Set();
 function toast(title, msg = ''){
   const key = title + '\u0000' + msg;
@@ -967,7 +1094,7 @@ const settings = Object.assign({
   /* power & network */
   sleepMin: 0, lockPin: '', powerMode: 'balanced', wifi: true,
   /* misc */
-  highContrast: false, showTour: true
+  highContrast: false, showTour: true, updateCheck: true
 }, store.get('settings', {}));
 
 /* interface font choices + taskbar heights, used by Personalization / Zoom */
@@ -2092,12 +2219,21 @@ APPS.settings = {
         return [
           head('System'),
           card(
-            row('uOS version', el('b', {}, '3.0 (single file)')),
+            row('uOS version', el('b', {}, UOS_VERSION)),
             row('Apps installed', el('span', { class: 'muted' }, Object.keys(APPS).length + '')),
             row('Screen', el('span', { class: 'muted' }, innerWidth + ' × ' + innerHeight)),
             row('Storage used', el('span', { class: 'muted' }, (storageBytes() / 1024).toFixed(1) + ' KB')),
             row('Session uptime', el('span', { class: 'muted' }, Math.floor(up / 60) + 'm ' + (up % 60) + 's')),
             row('Engine', el('span', { class: 'muted' }, navigator.userAgent.includes('Chrome') ? 'Chromium' : 'WebKit / Gecko'))
+          ),
+          head('Updates'),
+          card(
+            row('Installed', el('b', {}, 'uOS ' + UOS_VERSION)),
+            row('Status', el('span', { class: 'muted', id: 'updState' }, updateStatus().text)),
+            row('Check now', btnRow(
+              el('button', { class: 'btn primary', id: 'updNow' }, 'Check for updates'),
+              el('button', { class: 'btn', onclick: () => { const u = store.get('updateURL', UOS_RELEASES); window.open(u, '_blank'); } }, 'Release notes ↗'))),
+            row('Check automatically', sw('updateCheck'), 'Twice a day while you are online')
           ),
           head('Getting started'),
           card(
@@ -2162,6 +2298,18 @@ APPS.settings = {
       (SECTIONS[active] || (() => [note('Nothing here yet')]))().forEach(x => { if (x) host.append(x); });
       if (active === 'Power' && navigator.getBattery){
         navigator.getBattery().then(b => { const t = $('#setBattery', host); if (t) t.textContent = Math.round(b.level * 100) + '%' + (b.charging ? ' — charging' : ''); }).catch(() => {});
+      }
+      if (active === 'About & backup'){
+        const btn = $('#updNow', host);
+        if (btn) btn.onclick = async () => {
+          btn.disabled = true;
+          const was = btn.textContent;
+          btn.textContent = 'Checking…';
+          await checkForUpdate({ manual: true });
+          btn.disabled = false;
+          btn.textContent = was;
+          render();
+        };
       }
     }
     render();
@@ -3069,11 +3217,13 @@ APPS.htmlview = {
     const ta = $('#hvSrc', body), frame = $('#hvFrame', body), blank = $('#hvBlank', body);
     const auto = $('#hvAuto', body), info = $('#hvInfo', body), sizeEl = $('#hvSize', body);
     let file = args.file && FS[args.file] ? args.file : null;
-    let runNo = 0, autoT = null;
+    let label = args.name || null;          // used when content comes straight in
+    const raw = typeof args.text === 'string' ? args.text : null;
+    let runNo = 0, autoT = null, blobURL = null;
 
     function setTitle(){
       const t = $('.tb-title', win.el);
-      if (t) t.textContent = 'HTML Viewer — ' + (file ? file.split('/').pop() : 'untitled');
+      if (t) t.textContent = 'HTML Viewer — ' + (file ? file.split('/').pop() : (label || 'untitled'));
     }
     function showSize(){
       const bytes = new Blob([ta.value]).size;
@@ -3082,17 +3232,29 @@ APPS.htmlview = {
     function run(){
       const code = ta.value;
       runNo++;
-      /* trailing comment = a fresh srcdoc value, so the frame always reloads */
-      frame.srcdoc = code + '\n<' + '!-- uOS run ' + runNo + ' --' + '>';
+      if (code.length > 750000){
+        /* very large pages: a blob URL costs far less than a srcdoc string */
+        if (blobURL) URL.revokeObjectURL(blobURL);
+        blobURL = URL.createObjectURL(new Blob([code], { type: 'text/html' }));
+        frame.removeAttribute('srcdoc');
+        frame.src = blobURL;
+      } else {
+        if (blobURL){ URL.revokeObjectURL(blobURL); blobURL = null; }
+        frame.removeAttribute('src');
+        /* trailing comment = a fresh srcdoc value, so the frame always reloads */
+        frame.srcdoc = code + '\n<' + '!-- uOS run ' + runNo + ' --' + '>';
+      }
       blank.style.display = 'none';
-      info.textContent = 'Rendered at ' + new Date().toLocaleTimeString();
+      info.textContent = 'Rendered at ' + new Date().toLocaleTimeString() + (code.length > 750000 ? ' · large page' : '');
       showSize();
     }
     function load(text, name){
-      ta.value = text; file = name || null; setTitle(); showSize(); run();
+      ta.value = text;
+      if (name !== undefined){ file = /\.html?$/i.test(String(name)) && FS[name] ? name : null; label = String(name); }
+      setTitle(); showSize(); run();
     }
 
-    ta.value = file ? FS[file].content : starter;
+    ta.value = file ? FS[file].content : (raw != null ? raw : starter);
     ta.__focus = ta;
     setTitle(); showSize();
     run();
@@ -3237,7 +3399,7 @@ APPS.myapps = {
   mount(body, win){
     const DIR = 'Apps';
     const ICON_CHOICES = ['🎮','🌐','📝','🎨','🎵','🧮','📚','🧩','⚙️','📷','🗺️','💡'];
-    let list = store.get('myapps', []).filter(a => a && a.file && FS[a.file]);
+    let list = store.get('myapps', []).filter(a => a && a.file && (FS[a.file] || a.vault));
     const save = () => store.set('myapps', list);
     if (!FS[DIR]) FS[DIR] = { type: 'dir' };
 
@@ -3275,19 +3437,27 @@ APPS.myapps = {
 
     /* ---- helpers ---- */
     function sizeText(n){ return n < 1024 ? n + ' B' : n < 1048576 ? (n / 1024).toFixed(1) + ' KB' : (n / 1048576).toFixed(2) + ' MB'; }
-    function totalChars(){ return list.reduce((s, a) => s + ((FS[a.file] && FS[a.file].content) || '').length, 0); }
+    function sizeOf(a){ return a.vault ? (a.size || 0) : ((FS[a.file] && FS[a.file].content) || '').length; }
+    function totalChars(){ return list.reduce((s, a) => s + sizeOf(a), 0); }
     function usedChars(){ let b = 0; try { for (const k in localStorage) if (k.startsWith('uos.')) b += (localStorage[k] || '').length; } catch(e){} return b; }
     function slug(n){
       let s = String(n).toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
       s = s.replace(/\.[^.]+$/, '');
       return (s || 'app') + '.html';
     }
+    function taken(p){ return !!FS[p] || list.some(a => a.file === p); }
     function uniquePath(p){
-      if (!FS[p]) return p;
+      if (!taken(p)) return p;
       const base = p.replace(/\.html?$/i, ''), ext = (p.match(/\.html?$/i) || ['.html'])[0];
       let i = 2;
-      while (FS[base + '-' + i + ext]) i++;
+      while (taken(base + '-' + i + ext)) i++;
       return base + '-' + i + ext;
+    }
+    /* one reader, so the file system and the vault look the same to callers */
+    async function readApp(a){
+      if (FS[a.file]) return FS[a.file].content;
+      if (a.vault) return await vaultGet(a.file);
+      return null;
     }
     function guessIcon(name){
       const n = name.toLowerCase();
@@ -3302,12 +3472,21 @@ APPS.myapps = {
 
     /* ---- actions ---- */
     function open(a){
-      if (!FS[a.file]) { toast('My Apps', 'That file is missing'); render(); return; }
-      openApp('htmlview', { file: a.file });
+      if (FS[a.file]) return openApp('htmlview', { file: a.file });
+      if (a.vault){
+        vaultGet(a.file).then(text => {
+          if (text == null) return toast('My Apps', 'That app is missing from the vault');
+          openApp('htmlview', { text: text, name: a.name });
+        }).catch(() => toast('My Apps', 'Could not read that app'));
+        return;
+      }
+      toast('My Apps', 'That file is missing');
+      render();
     }
-    function openInBrowser(a){
-      if (!FS[a.file]) return;
-      const url = URL.createObjectURL(new Blob([FS[a.file].content], { type: 'text/html' }));
+    async function openInBrowser(a){
+      const text = await readApp(a);
+      if (text == null) return toast('My Apps', 'That app is missing');
+      const url = URL.createObjectURL(new Blob([text], { type: 'text/html' }));
       if (!window.open(url, '_blank')) toast('My Apps', 'The browser blocked the new tab');
       setTimeout(() => URL.revokeObjectURL(url), 60000);
     }
@@ -3334,18 +3513,23 @@ APPS.myapps = {
             if (t) { a.name = t; save(); render(); }
           } },
         { label: 'Change icon…', act: () => pickIcon(a, e) },
-        { label: 'Duplicate', act: () => {
+        { label: 'Duplicate', act: async () => {
+            const text = await readApp(a);
+            if (text == null) return toast('My Apps', 'That app is missing');
             const p = uniquePath(DIR + '/' + slug(a.name + ' copy'));
-            fsWrite(p, FS[a.file].content);
-            list.push({ file: p, name: a.name + ' copy', icon: a.icon, added: Date.now() });
-            save(); render(); toast('My Apps', 'Duplicated');
+            const e2 = { file: p, name: a.name + ' copy', icon: a.icon, added: Date.now() };
+            if (text.length > vault.THRESHOLD){ e2.vault = true; e2.size = text.length; await vaultPut(p, text); }
+            else fsWrite(p, text);
+            list.push(e2); save(); render(); toast('My Apps', 'Duplicated');
           } },
         { sep: true },
-        { label: 'Remove', act: () => {
-            if (!confirm('Remove "' + a.name + '"?\n\nThe file goes to the Recycle Bin, so you can restore it.')) return;
-            trashAdd(a.file);
+        { label: 'Remove', act: async () => {
+            if (!confirm('Remove "' + a.name + '"?\n\n' + (a.vault
+              ? 'It is stored in the uOS vault, so this deletes it.'
+              : 'The file goes to the Recycle Bin, so you can restore it.'))) return;
+            if (a.vault) await vaultDel(a.file); else trashAdd(a.file);
             list = list.filter(x => x !== a);
-            save(); render(); toast('My Apps', 'Moved to Recycle Bin');
+            save(); render(); toast('My Apps', a.vault ? 'Removed from the vault' : 'Moved to Recycle Bin');
           } }
       ]);
     }
@@ -3363,7 +3547,8 @@ APPS.myapps = {
           el('b', {}, 'No apps yet'),
           el('div', { class: 'muted', style: 'font-size:12.5px;line-height:1.55' },
             'Add a single HTML file from your computer — a game, a tool, a little page you wrote. ' +
-            'It is stored inside uOS, so it opens offline and never leaves this browser.'),
+            'It is stored inside uOS, so it opens offline and never leaves this browser. ' +
+            'Small ones live in the file system; big ones (up to 64 MB) go to the vault.'),
           el('div', { style: 'display:flex;gap:8px;margin-top:6px' },
             el('button', { class: 'btn primary', onclick: () => picker.click() }, '＋ Add HTML file…'),
             el('button', { class: 'btn', onclick: () => makeNew() }, 'Start from a blank page')));
@@ -3389,8 +3574,24 @@ APPS.myapps = {
     function importText(text, fileName){
       const name = String(fileName).replace(/\.[^.]+$/, '').slice(0, 40) || 'App';
       const path = uniquePath(DIR + '/' + slug(fileName));
+      const entry = { file: path, name: name, icon: guessIcon(fileName), added: Date.now() };
+      if (text.length > vault.THRESHOLD){
+        /* too big for localStorage — keep it in the IndexedDB vault.
+           Show it straight away, then roll back if the write fails. */
+        entry.vault = true;
+        entry.size = text.length;
+        list.push(entry);
+        save(); render();
+        toast('My Apps', 'Added ' + fileName + ' · ' + sizeText(text.length) + ' (vault)');
+        vaultPut(path, text).catch(() => {
+          list = list.filter(x => x !== entry);
+          save(); render();
+          toast('My Apps', 'This browser would not store a file that big');
+        });
+        return;
+      }
       fsWrite(path, text);
-      list.push({ file: path, name: name, icon: guessIcon(fileName), added: Date.now() });
+      list.push(entry);
       save(); render();
       toast('My Apps', 'Added ' + fileName);
     }
@@ -3409,11 +3610,12 @@ APPS.myapps = {
       const f = picker.files && picker.files[0];
       picker.value = '';
       if (!f) return;
-      if (f.size > 3 * 1024 * 1024){ toast('My Apps', 'Too big — keep a single app under 3 MB'); return; }
+      if (f.size > 64 * 1024 * 1024){ toast('My Apps', 'Too big — keep a single app under 64 MB'); return; }
       const fr = new FileReader();
       fr.onload = () => {
         const text = String(fr.result);
-        if (usedChars() + text.length > 2000000){
+        /* only the localStorage path has a tight budget; the vault does not */
+        if (text.length <= vault.THRESHOLD && usedChars() + text.length > 2000000){
           toast('My Apps', 'Not enough browser storage left — remove an app first');
           return;
         }
@@ -4342,10 +4544,15 @@ APPS.about = {
         <div class="muted" style="font-size:12px;line-height:1.6">One HTML file — no build step, no dependencies, nothing to install.</div>
       </div>
       <div class="card" style="width:100%;max-width:380px;gap:0">
-        <div class="kv"><span class="muted">Version</span><b>3.0</b></div>
+        <div class="kv"><span class="muted">Version</span><b>${UOS_VERSION}</b></div>
         <div class="kv"><span class="muted">Apps</span><b>${Object.keys(APPS).length}</b></div>
         <div class="kv"><span class="muted">Screen</span><b>${innerWidth} &times; ${innerHeight}</b></div>
         <div class="kv"><span class="muted">Engine</span><b>${navigator.userAgent.includes('Chrome') ? 'Chromium' : 'WebKit / Gecko'}</b></div>
+        <div class="kv"><span class="muted">Updates</span><span class="muted" id="aboutUpd" style="font-size:11.5px">&#8230;</span></div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn" id="aboutCheck">Check for updates</button>
+        <button class="btn" onclick="window.open('${UOS_RELEASES}','_blank')">Releases ↗</button>
       </div>
       <div class="muted" style="font-size:11.5px">Right-click the desktop to add widgets, notes and folders.</div>
       <div id="aboutSplash" title="click for another" style="font-size:12px;font-weight:600;color:#c9a45f;opacity:.9;transform:rotate(-2.5deg);cursor:pointer;user-select:none"></div>
@@ -4354,6 +4561,16 @@ APPS.about = {
     const reroll = () => applySplash(sp);
     sp.addEventListener('click', reroll);
     reroll();
+    /* updates */
+    const upd = $('#aboutUpd', body);
+    const paint = () => { if (upd) upd.textContent = updateStatus().text; };
+    paint();
+    const chk = $('#aboutCheck', body);
+    if (chk) chk.onclick = async () => {
+      chk.disabled = true; if (upd) upd.textContent = 'Checking…';
+      await checkForUpdate({ manual: true });
+      chk.disabled = false; paint();
+    };
   }
 };
 
@@ -5566,7 +5783,8 @@ updateClock();
 renderStartMenu();
 renderRecents();
 boot();
-console.log('%cuOS%c — web operating system loaded. Apps: ' + Object.keys(APPS).length,
+maybeAutoCheck();
+console.log('%cuOS ' + UOS_VERSION + '%c — web operating system loaded. Apps: ' + Object.keys(APPS).length,
   'font-weight:bold;color:#0078d4;font-size:14px', 'color:#888');
 </script>
 </body>
