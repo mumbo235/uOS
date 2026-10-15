@@ -390,6 +390,11 @@ h3.sect{font-size:12px;text-transform:uppercase;letter-spacing:1px;color:var(--t
 .hprev iframe{position:absolute;inset:0;width:100%;height:100%;border:0;display:block;background:#fff}
 .hprev .hblank{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#7a8393;font-size:13px;text-align:center;padding:20px}
 .hstat{display:flex;justify-content:space-between;gap:12px;padding:6px 10px;border-top:1px solid var(--border);background:var(--surface-2);font-size:11.5px}
+/* preview-only ("fullscreen") mode */
+.hsplit.onlyprev>textarea,.hsplit.onlyprev .hdiv{display:none}
+.hprev:fullscreen{background:#fff;border-radius:0}
+.hv-exit{position:absolute;top:10px;right:10px;z-index:5;padding:7px 12px;border-radius:8px;border:1px solid rgba(0,0,0,.18);background:rgba(255,255,255,.94);color:#1c2029;font-size:12px;cursor:pointer;box-shadow:0 3px 12px rgba(0,0,0,.28)}
+.hv-exit:hover{background:#fff}
 input[type=color]{-webkit-appearance:none;appearance:none;border:none;width:46px;height:34px;border-radius:8px;background:none;padding:0;cursor:pointer}
 input[type=color]::-webkit-color-swatch-wrapper{padding:0}
 input[type=color]::-webkit-color-swatch{border:1px solid var(--border);border-radius:8px}
@@ -3041,10 +3046,11 @@ APPS.htmlview = {
         <div class="sep"></div>
         <button class="btn" id="hvDown">Download .html</button>
         <button class="btn" id="hvTab">Open in browser ↗</button>
+        <button class="btn" id="hvFull" title="Fullscreen preview (Ctrl+Shift+F)">⛶ Fullscreen</button>
         <div class="sep"></div>
         <button class="switch" id="hvAuto" title="Re-render as you type"><i></i></button>
         <span class="muted" style="font-size:12px">Auto-run</span>
-        <span class="muted" style="font-size:12px;margin-left:auto">Ctrl + Enter</span>
+        <span class="muted" style="font-size:12px;margin-left:auto">Ctrl + Enter · Esc exits</span>
       </div>
       <div class="hsplit" id="hvSplit">
         <textarea class="mono-area" id="hvSrc" spellcheck="false" wrap="off"></textarea>
@@ -3164,6 +3170,59 @@ APPS.htmlview = {
     const stopDrag = () => { dragging = false; div.classList.remove('drag'); };
     div.addEventListener('pointerup', stopDrag);
     div.addEventListener('lostpointercapture', stopDrag);
+
+    /* --- fullscreen preview -------------------------------------------
+       Tries the real Fullscreen API first; if the browser refuses (no
+       gesture, blocked), falls back to filling the window with the preview. */
+    const prev = $('.hprev', body);
+    const exitBtn = el('button', { class: 'hv-exit', title: 'Exit fullscreen (Esc)' }, '✕ Exit fullscreen');
+    exitBtn.style.display = 'none';
+    exitBtn.onclick = e => { e.stopPropagation(); leaveFull(); };
+    prev.append(exitBtn);
+    let expanded = false;
+
+    function isFull(){ return document.fullscreenElement === prev; }
+    function showExit(on){ exitBtn.style.display = on ? 'block' : 'none'; }
+    function setExpanded(on){
+      expanded = on;
+      $('#hvSplit', body).classList.toggle('onlyprev', on);
+      showExit(on || isFull());
+    }
+    function leaveFull(){
+      if (expanded) setExpanded(false);
+      if (isFull() && document.exitFullscreen){
+        const p = document.exitFullscreen();
+        if (p && p.catch) p.catch(() => {});
+      }
+    }
+    function toggleFull(){
+      if (isFull() || expanded){ leaveFull(); return; }
+      /* the in-window mode always works, so do it first; then ask the browser
+         for the real thing — if it refuses, we still end up with a big preview */
+      setExpanded(true);
+      if (prev.requestFullscreen){
+        const p = prev.requestFullscreen();
+        if (p && p.catch) p.catch(() => {});
+      }
+    }
+
+    $('#hvFull', body).onclick = toggleFull;
+    const onFsChange = () => showExit(isFull() || expanded);
+    document.addEventListener('fullscreenchange', onFsChange);
+    function localKeys(e){
+      if (e.key === 'Escape' && (isFull() || expanded)){ e.stopPropagation(); leaveFull(); return; }
+      if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'f'){ e.preventDefault(); toggleFull(); }
+    }
+    /* listen on the whole window, not just the app body — Escape should work
+       wherever the focus happens to be inside it */
+    win.el.addEventListener('keydown', localKeys);
+
+    /* handing the window back its clean state on close */
+    return () => {
+      document.removeEventListener('fullscreenchange', onFsChange);
+      win.el.removeEventListener('keydown', localKeys);
+      if (isFull() && document.exitFullscreen){ try { document.exitFullscreen(); } catch(e){} }
+    };
   }
 };
 
@@ -5098,8 +5157,11 @@ function boot(){
       setTimeout(step, i === lines.length ? 420 : 150);
     } else {
       clearInterval(__splashT);
-      $('#boot').classList.add('done');
-      setTimeout(() => { $('#boot').style.display = 'none'; }, 550);
+      const bootEl = $('#boot');
+      if (bootEl){
+        bootEl.classList.add('done');
+        setTimeout(() => { bootEl.style.display = 'none'; }, 550);
+      }
       setTimeout(() => toast('uOS', 'Right-click the desktop or press Start to begin.'), 900);
       maybeTour();
     }
