@@ -7,6 +7,10 @@ dependencies, no installs, no accounts — just open it.
 
 ## New in 3.1
 
+- **Arcade** — **17 games, built in**: Snake, Block Drop (Tetris), Brick Breaker,
+  Paddle Duel, Invaders, Asteroids, Jumper, Dodger, Tower, Whack-a-mole, Reaction,
+  2048, Minesweeper, Memory, Simon, Tic-tac-toe and Word Guess. Browsable menu with
+  categories, search, best scores and play counts — all saved locally.
 - **HTML Viewer** — open, edit and run HTML locally: source on the left, live sandboxed
   preview on the right, with **⛶ Fullscreen** (Ctrl+Shift+F, Esc to exit). Opens any
   local `.html` file at any size, saves back to uOS, downloads, or opens in a real tab.
@@ -29,7 +33,8 @@ dependencies, no installs, no accounts — just open it.
 - **27 apps** — Files, Notepad, Calculator, Terminal, Settings, Nova Browser, Paint,
   Music Studio, Clock/Timer, Task Manager, Colour Picker, QR Code, Password Generator,
   Calendar, Sticky Notes, Media Player, Code Editor, **HTML Viewer**, **My Apps**,
-  Photos, AI Assistant, Recycle Bin, Clipboard, Run, Widgets and About
+  **Arcade**, Photos, AI Assistant, Recycle Bin, Clipboard, Run, Widgets and About
+- **Arcade** with 17 built-in games and a proper menu — categories, search, best scores
 - **Window manager** with drag, resize, minimise/maximise, edge-snapping and an Alt+Tab
   switcher
 - **Desktop** with grid-snapping icons that never overlap, marquee selection and a
