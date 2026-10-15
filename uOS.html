@@ -1351,6 +1351,7 @@ const ICONS = {
   media:      TILE('#fd79a8', `<circle cx="12" cy="12" r="8.2" fill="none" stroke="${W}" stroke-width="1.7"/><path d="M10.3 8.9 15.1 12l-4.8 3.1z" fill="${W}"/>`),
   code:       TILE('#4f46e5', `<path d="M8.6 8.4 5 12l3.6 3.6M15.4 8.4 19 12l-3.6 3.6M13.7 6.6l-3.4 10.8" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>`),
   htmlview:   TILE('#f97316', `<rect x="3.1" y="4.4" width="17.8" height="15.2" rx="2.9" fill="none" stroke="#ffffff" stroke-width="1.7"/><path d="M3.1 8.6h17.8" stroke="#ffffff" stroke-width="1.5"/><circle cx="5.7" cy="6.5" r=".9" fill="#ffffff"/><path d="M10.3 11.6l4.6 3-4.6 3z" fill="#ffffff"/>`),
+  myapps:     TILE('#65a30d', `<rect x="3.4" y="4.2" width="17.2" height="4.6" rx="1.9" fill="#ffffff"/><rect x="3.4" y="10.2" width="17.2" height="4.6" rx="1.9" fill="#ffffff" opacity=".82"/><rect x="3.4" y="16.2" width="10.8" height="3.6" rx="1.8" fill="#ffffff" opacity=".6"/>`),
   ai:         TILE('#7c5cff', `<path d="M11.4 3.4l1.7 4.9 4.9 1.7-4.9 1.7-1.7 4.9-1.7-4.9L4.8 10l4.9-1.7z" fill="${W}"/><path d="M18.2 13.6l.85 2.35 2.35.85-2.35.85-.85 2.35-.85-2.35-2.35-.85 2.35-.85z" fill="${W}" opacity=".82"/>`),
   colorpicker:TILE('#f6a623', `<circle cx="9.2" cy="10" r="4.1" fill="${W}" opacity=".9"/><circle cx="14.8" cy="10" r="4.1" fill="${W}" opacity=".68"/><circle cx="12" cy="14.8" r="4.1" fill="${W}" opacity=".5"/>`),
   viewer:     TILE('#38bdf8', `<rect x="4" y="5" width="16" height="14" rx="2.4" fill="${W}"/><circle cx="9" cy="10" r="1.7" fill="#38bdf8"/><path d="M6.4 17.6l4-4.6 3 3.2 2.2-2.3 4.2 3.7z" fill="#38bdf8"/>`),
@@ -3226,6 +3227,209 @@ APPS.htmlview = {
   }
 };
 
+/* ------------------------------ My Apps -----------------------------
+   A private shelf of single-file HTML apps. The files themselves live in the
+   uOS file system (folder "Apps"), so they show up in Files, can be restored
+   from the Recycle Bin, and open in the HTML Viewer — nothing leaves the
+   browser and nothing is fetched from the network. */
+APPS.myapps = {
+  name: 'My Apps', icon: '🧩', w: 900, h: 610,
+  mount(body, win){
+    const DIR = 'Apps';
+    const ICON_CHOICES = ['🎮','🌐','📝','🎨','🎵','🧮','📚','🧩','⚙️','📷','🗺️','💡'];
+    let list = store.get('myapps', []).filter(a => a && a.file && FS[a.file]);
+    const save = () => store.set('myapps', list);
+    if (!FS[DIR]) FS[DIR] = { type: 'dir' };
+
+    const NEW_APP = [
+      '<!DOCTYPE html>',
+      '<html lang="en">',
+      '<head>',
+      '<meta charset="utf-8">',
+      '<title>New app</title>',
+      '<style>',
+      '  body { margin:0; padding:34px; font-family:system-ui,-apple-system,sans-serif;',
+      '         background:linear-gradient(135deg,#0f172a,#1e3a8a); color:#eef2ff; }',
+      '  h1 { margin:0 0 8px; font-size:26px; }',
+      '  p  { margin:0; opacity:.85; line-height:1.5; }',
+      '</style>',
+      '</head>',
+      '<body>',
+      '  <h1>My new app</h1>',
+      '  <p>Edit this in the HTML Viewer, then Run to see it. Save to Files keeps your changes.</p>',
+      '</body>',
+      '</html>'
+    ].join('\n');
+
+    body.innerHTML = `
+      <div class="toolbar">
+        <button class="btn primary" id="maAdd">＋ Add HTML file…</button>
+        <button class="btn" id="maNew">New app</button>
+        <div class="sep"></div>
+        <input class="field" id="maSearch" placeholder="Filter…" style="max-width:190px">
+        <span class="muted" style="font-size:12px;margin-left:auto" id="maInfo"></span>
+      </div>
+      <div class="pad" style="flex:1;min-height:0;overflow:auto" id="maHost"></div>`;
+
+    const host = $('#maHost', body), search = $('#maSearch', body), info = $('#maInfo', body);
+
+    /* ---- helpers ---- */
+    function sizeText(n){ return n < 1024 ? n + ' B' : n < 1048576 ? (n / 1024).toFixed(1) + ' KB' : (n / 1048576).toFixed(2) + ' MB'; }
+    function totalChars(){ return list.reduce((s, a) => s + ((FS[a.file] && FS[a.file].content) || '').length, 0); }
+    function usedChars(){ let b = 0; try { for (const k in localStorage) if (k.startsWith('uos.')) b += (localStorage[k] || '').length; } catch(e){} return b; }
+    function slug(n){
+      let s = String(n).toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
+      s = s.replace(/\.[^.]+$/, '');
+      return (s || 'app') + '.html';
+    }
+    function uniquePath(p){
+      if (!FS[p]) return p;
+      const base = p.replace(/\.html?$/i, ''), ext = (p.match(/\.html?$/i) || ['.html'])[0];
+      let i = 2;
+      while (FS[base + '-' + i + ext]) i++;
+      return base + '-' + i + ext;
+    }
+    function guessIcon(name){
+      const n = name.toLowerCase();
+      if (/game|play|arcade|quest|adventure|snake|tetris|pong|rpg|zelda|mario/.test(n)) return '🎮';
+      if (/note|todo|list|task/.test(n)) return '📝';
+      if (/paint|draw|art|sketch/.test(n)) return '🎨';
+      if (/music|sound|piano|drum/.test(n)) return '🎵';
+      if (/calc|math|convert/.test(n)) return '🧮';
+      if (/read|book|learn|study/.test(n)) return '📚';
+      return '📄';
+    }
+
+    /* ---- actions ---- */
+    function open(a){
+      if (!FS[a.file]) { toast('My Apps', 'That file is missing'); render(); return; }
+      openApp('htmlview', { file: a.file });
+    }
+    function openInBrowser(a){
+      if (!FS[a.file]) return;
+      const url = URL.createObjectURL(new Blob([FS[a.file].content], { type: 'text/html' }));
+      if (!window.open(url, '_blank')) toast('My Apps', 'The browser blocked the new tab');
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    }
+    function pickIcon(a, e){
+      const items = ICON_CHOICES.map(ic => ({ label: ic, act: () => { a.icon = ic; save(); render(); } }));
+      items.push({ sep: true });
+      items.push({ label: 'Custom…', act: () => {
+        const v = prompt('Icon — an emoji or 1–2 characters:', a.icon || '');
+        if (v === null) return;
+        const t = Array.from(v.trim()).slice(0, 2).join('');
+        if (t) { a.icon = t; save(); render(); }
+      } });
+      showContext(e.clientX, e.clientY, items);
+    }
+    function menu(e, a){
+      showContext(e.clientX, e.clientY, [
+        { label: 'Open', act: () => open(a) },
+        { label: 'Open in browser ↗', act: () => openInBrowser(a) },
+        { sep: true },
+        { label: 'Rename…', act: () => {
+            const n = prompt('Name this app:', a.name);
+            if (n === null) return;
+            const t = n.trim().slice(0, 40);
+            if (t) { a.name = t; save(); render(); }
+          } },
+        { label: 'Change icon…', act: () => pickIcon(a, e) },
+        { label: 'Duplicate', act: () => {
+            const p = uniquePath(DIR + '/' + slug(a.name + ' copy'));
+            fsWrite(p, FS[a.file].content);
+            list.push({ file: p, name: a.name + ' copy', icon: a.icon, added: Date.now() });
+            save(); render(); toast('My Apps', 'Duplicated');
+          } },
+        { sep: true },
+        { label: 'Remove', act: () => {
+            if (!confirm('Remove "' + a.name + '"?\n\nThe file goes to the Recycle Bin, so you can restore it.')) return;
+            trashAdd(a.file);
+            list = list.filter(x => x !== a);
+            save(); render(); toast('My Apps', 'Moved to Recycle Bin');
+          } }
+      ]);
+    }
+
+    /* ---- render ---- */
+    function render(){
+      host.innerHTML = '';
+      search.value = search.value || '';
+      const q = (search.value || '').trim().toLowerCase();
+      const shown = list.filter(a => !q || a.name.toLowerCase().includes(q));
+      info.textContent = list.length + (list.length === 1 ? ' app · ' : ' apps · ') + sizeText(totalChars()) + ' stored';
+
+      if (!list.length){
+        const card = el('div', { class: 'card', style: 'max-width:540px;margin:8px auto' },
+          el('b', {}, 'No apps yet'),
+          el('div', { class: 'muted', style: 'font-size:12.5px;line-height:1.55' },
+            'Add a single HTML file from your computer — a game, a tool, a little page you wrote. ' +
+            'It is stored inside uOS, so it opens offline and never leaves this browser.'),
+          el('div', { style: 'display:flex;gap:8px;margin-top:6px' },
+            el('button', { class: 'btn primary', onclick: () => picker.click() }, '＋ Add HTML file…'),
+            el('button', { class: 'btn', onclick: () => makeNew() }, 'Start from a blank page')));
+        host.append(card);
+        return;
+      }
+      if (!shown.length){
+        host.append(el('div', { class: 'muted', style: 'font-size:12.5px;padding:10px' }, 'Nothing matches “' + q + '”'));
+        return;
+      }
+      const grid = el('div', { class: 'sm-grid', style: 'padding:0' });
+      shown.forEach(a => {
+        const t = el('button', { class: 'sm-app', title: a.file + '\nDouble-click to open  ·  right-click for options' },
+          el('span', { class: 'ico' }, a.icon || '📄'),
+          el('span', { class: 'lbl' }, a.name));
+        t.addEventListener('dblclick', () => open(a));
+        t.addEventListener('contextmenu', ev => { ev.preventDefault(); ev.stopPropagation(); menu(ev, a); });
+        grid.append(t);
+      });
+      host.append(grid);
+    }
+
+    function importText(text, fileName){
+      const name = String(fileName).replace(/\.[^.]+$/, '').slice(0, 40) || 'App';
+      const path = uniquePath(DIR + '/' + slug(fileName));
+      fsWrite(path, text);
+      list.push({ file: path, name: name, icon: guessIcon(fileName), added: Date.now() });
+      save(); render();
+      toast('My Apps', 'Added ' + fileName);
+    }
+    function makeNew(){
+      const path = uniquePath(DIR + '/new-app.html');
+      fsWrite(path, NEW_APP);
+      list.push({ file: path, name: 'New app', icon: '🧩', added: Date.now() });
+      save(); render();
+      openApp('htmlview', { file: path });
+    }
+
+    /* ---- file picker (from this computer) ---- */
+    const picker = el('input', { type: 'file', accept: '.html,.htm,.xhtml,.svg,.txt,.md' });
+    picker.style.display = 'none';
+    picker.addEventListener('change', () => {
+      const f = picker.files && picker.files[0];
+      picker.value = '';
+      if (!f) return;
+      if (f.size > 3 * 1024 * 1024){ toast('My Apps', 'Too big — keep a single app under 3 MB'); return; }
+      const fr = new FileReader();
+      fr.onload = () => {
+        const text = String(fr.result);
+        if (usedChars() + text.length > 2000000){
+          toast('My Apps', 'Not enough browser storage left — remove an app first');
+          return;
+        }
+        importText(text, f.name);
+      };
+      fr.readAsText(f);
+    });
+    body.append(picker);
+
+    $('#maAdd', body).onclick = () => picker.click();
+    $('#maNew', body).onclick = makeNew;
+    search.addEventListener('input', render);
+    render();
+  }
+};
+
 /* ------------------------------ Image Viewer ------------------------ */
 APPS.viewer = {
   name: 'Photos', icon: '🖼️', w: 760, h: 580,
@@ -3683,7 +3887,7 @@ const RUN_ALIASES = {
   settings: 'settings', control: 'settings', browser: 'browser', edge: 'browser', nova: 'browser',
   ai: 'ai', chat: 'ai',
   taskmgr: 'taskmgr', task: 'taskmgr', clock: 'clock', calendar: 'calendar', camera: 'viewer',
-  media: 'media', code: 'code', html: 'htmlview', htmlview: 'htmlview', preview: 'htmlview', webpage: 'htmlview', run: 'run', trash: 'trash', bin: 'trash', recycle: 'trash',
+  media: 'media', code: 'code', html: 'htmlview', htmlview: 'htmlview', preview: 'htmlview', webpage: 'htmlview', myapps: 'myapps', shelf: 'myapps', launcher: 'myapps', run: 'run', trash: 'trash', bin: 'trash', recycle: 'trash',
   clipboard: 'clipboard', sticky: 'sticky', notes: 'sticky', qr: 'qrgen', password: 'passgen', color: 'colorpicker',
   about: 'about', info: 'about', credits: 'about'
 };
