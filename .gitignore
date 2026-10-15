@@ -1,0 +1,6 @@
+# personal / local files that should not be published
+classroommaxxing.html
+test-parse.html
+
+# build artefacts
+uos-*.zip
