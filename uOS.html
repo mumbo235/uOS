@@ -3657,6 +3657,46 @@ APPS.about = {
    ===================================================================== */
 const DESKTOP_ICONS = ['trash','browser','files','classmax','ai','terminal','settings','about'];
 
+/* Desktop shortcuts are only *shown* from this list — removing one never
+   uninstalls the app, it just takes the icon off the desktop. Apps stay in
+   the Start menu, search, Run dialog and everywhere else. */
+function hiddenIcons(){ return store.get('hiddenIcons', []) || []; }   /* taken off the desktop */
+function addedIcons(){ return store.get('addedIcons', []) || []; }     /* apps the user put on it */
+function desktopIcons(){
+  const h = hiddenIcons(), a = addedIcons();
+  return DESKTOP_ICONS.filter(function(id){ return h.indexOf(id) < 0; })
+    .concat(a.filter(function(id){ return APPS[id] && DESKTOP_ICONS.indexOf(id) < 0; }));
+}
+function onDesktop(id){
+  const h = hiddenIcons(), a = addedIcons();
+  return (DESKTOP_ICONS.indexOf(id) >= 0 && h.indexOf(id) < 0) || a.indexOf(id) >= 0;
+}
+function hideDesktopIcon(id){
+  if (DESKTOP_ICONS.indexOf(id) >= 0){
+    const h = hiddenIcons();
+    if (h.indexOf(id) < 0){ h.push(id); store.set('hiddenIcons', h); }
+  } else {
+    store.set('addedIcons', addedIcons().filter(function(x){ return x !== id; }));
+  }
+  renderDesktopIcons();
+}
+function showDesktopIcon(id){
+  if (DESKTOP_ICONS.indexOf(id) >= 0){
+    store.set('hiddenIcons', hiddenIcons().filter(function(x){ return x !== id; }));
+  } else {
+    const a = addedIcons();
+    if (a.indexOf(id) < 0){ a.push(id); store.set('addedIcons', a); }
+  }
+  renderDesktopIcons();
+}
+function restoreDesktopIcons(){
+  store.set('hiddenIcons', []);
+  store.set('addedIcons', []);
+  store.set('iconPos', {});
+  renderDesktopIcons();
+  toast('Desktop', 'Desktop icons restored to default');
+}
+
 /* --------------------------- taskbar pinning ------------------------ */
 let pinnedList = store.get('pinned', ['browser', 'files']);
 function isPinned(id){ return pinnedList.includes(id); }
@@ -3845,7 +3885,7 @@ function renderDesktopIcons(){
   const rect = $('#desktop').getBoundingClientRect();
   measureIconCell();
   const saved = store.get('iconPos', {}) || {};
-  DESKTOP_ICONS.forEach((id, i) => {
+  desktopIcons().forEach((id, i) => {
     const a = APPS[id]; if (!a) return;
     const n = el('div', { class: 'dicon', 'data-app': id },
       el('div', { class: 'ico', html: iconHTML(id, a.icon) }),
@@ -3884,7 +3924,12 @@ function renderDesktopIcons(){
         isPinned(id)
           ? { label: 'Unpin from taskbar', act: () => unpinApp(id) }
           : { label: 'Pin to taskbar', act: () => pinApp(id) },
-        { label: 'Auto arrange icons', act: autoArrangeIcons }
+        { sep: true },
+        { label: 'Auto arrange icons', act: autoArrangeIcons },
+        { label: 'Remove from desktop', act: () => {
+            hideDesktopIcon(id);
+            toast('Desktop', a.name + ' removed — still in the Start menu');
+          } }
       ]);
     });
 
@@ -3974,7 +4019,11 @@ function renderStartMenu(filter = ''){
         { sep: true },
         isPinned(id)
           ? { label: 'Unpin from taskbar', act: () => { unpinApp(id); toast('Taskbar', 'Unpinned ' + a.name); } }
-          : { label: 'Pin to taskbar', act: () => { pinApp(id); toast('Taskbar', 'Pinned ' + a.name); } }
+          : { label: 'Pin to taskbar', act: () => { pinApp(id); toast('Taskbar', 'Pinned ' + a.name); } },
+        { sep: true },
+        onDesktop(id)
+          ? { label: 'Remove from desktop', act: () => { hideDesktopIcon(id); toast('Desktop', a.name + ' removed from the desktop'); } }
+          : { label: 'Add to desktop', act: () => { showDesktopIcon(id); toast('Desktop', a.name + ' added to the desktop'); } }
       ]);
     });
     g.append(b);
@@ -4002,7 +4051,7 @@ function addRecent(id){
 function showContext(x, y, items){
   const m = $('#ctxMenu');
   m.innerHTML = '';
-  items.forEach(it => {
+  items.filter(Boolean).forEach(it => {
     if (it.sep){ m.append(el('div', { class: 'ctx-sep' })); return; }
     const b = el('button', { class: 'ctx' + (it.disabled ? ' disabled' : '') },
       it.icon ? el('span', { style: 'width:16px;display:inline-block;text-align:center' }, it.icon) : null,
@@ -4077,6 +4126,7 @@ $('#desktop').addEventListener('contextmenu', e => {
     { label: 'Personalize', act: () => openApp('settings') },
     { label: 'Next wallpaper', act: () => { settings.wallpaper = (settings.wallpaper + 1) % WALLPAPERS.length; settings.customWall = null; saveSettings(); } },
     { label: 'Auto arrange icons', act: autoArrangeIcons },
+    { label: 'Restore removed icons', act: restoreDesktopIcons },
     { sep: true },
     selCount
       ? { label: 'Deselect all (' + selCount + ')', act: () => $$('.dicon').forEach(x => x.classList.remove('sel')) }
