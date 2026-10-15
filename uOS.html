@@ -381,6 +381,15 @@ h3.sect{font-size:12px;text-transform:uppercase;letter-spacing:1px;color:var(--t
 .meter i{display:block;height:100%;width:0;transition:width .25s,background .25s}
 .mono-area{width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:9px;color:var(--text);font-family:var(--mono);font-size:12.5px;padding:12px;outline:none;resize:vertical;line-height:1.55}
 .console{background:#0a0d14;border-radius:9px;padding:11px;font-family:var(--mono);font-size:12px;color:#c8ffd4;min-height:80px;max-height:190px;overflow:auto;white-space:pre-wrap;word-break:break-word}
+/* ---- HTML Viewer: source | preview split ---- */
+.hsplit{flex:1;display:flex;align-items:stretch;min-height:0}
+.hsplit>textarea{flex:0 0 46%;min-width:120px;border-radius:0;border:0;height:auto;resize:none;padding:12px 12px 14px}
+.hdiv{flex:0 0 7px;background:var(--field);border-left:1px solid var(--border);border-right:1px solid var(--border);cursor:col-resize;transition:background .12s}
+.hdiv:hover,.hdiv.drag{background:var(--accent)}
+.hprev{flex:1;min-width:0;position:relative;background:#fff}
+.hprev iframe{position:absolute;inset:0;width:100%;height:100%;border:0;display:block;background:#fff}
+.hprev .hblank{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#7a8393;font-size:13px;text-align:center;padding:20px}
+.hstat{display:flex;justify-content:space-between;gap:12px;padding:6px 10px;border-top:1px solid var(--border);background:var(--surface-2);font-size:11.5px}
 input[type=color]{-webkit-appearance:none;appearance:none;border:none;width:46px;height:34px;border-radius:8px;background:none;padding:0;cursor:pointer}
 input[type=color]::-webkit-color-swatch-wrapper{padding:0}
 input[type=color]::-webkit-color-swatch{border:1px solid var(--border);border-radius:8px}
@@ -1123,7 +1132,9 @@ function createWindow(appId, app, args = {}){
     cleanup: null, minimized: false, maximized: false, prevRect: null
   };
 
-  const w = app.w || 720, h = app.h || 500;
+  /* never open a window larger than the screen can show */
+  const w = Math.max(300, Math.min(app.w || 720, VW() - 16));
+  const h = Math.max(220, Math.min(app.h || 500, VH() - TB() - 16));
   const x = clamp(Math.round((VW() - w) / 2) + ((windows.size % 5) - 2) * 26, 8, Math.max(8, VW() - w - 8));
   const y = clamp(Math.round((VH() - TB() - h) / 2) + ((windows.size % 5) - 2) * 22, 6, Math.max(6, VH() - TB() - h - 6));
 
@@ -1334,6 +1345,7 @@ const ICONS = {
   sticky:     TILE('#fdcb6e', `<path d="M6 4h12a1.2 1.2 0 0 1 1.2 1.2v8.8L14 19.6H6a1.2 1.2 0 0 1-1.2-1.2V5.2A1.2 1.2 0 0 1 6 4Z" fill="${W}"/><path d="M14 19.2v-3.4a1.2 1.2 0 0 1 1.2-1.2h3.5Z" fill="#00000024"/>`),
   media:      TILE('#fd79a8', `<circle cx="12" cy="12" r="8.2" fill="none" stroke="${W}" stroke-width="1.7"/><path d="M10.3 8.9 15.1 12l-4.8 3.1z" fill="${W}"/>`),
   code:       TILE('#4f46e5', `<path d="M8.6 8.4 5 12l3.6 3.6M15.4 8.4 19 12l-3.6 3.6M13.7 6.6l-3.4 10.8" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>`),
+  htmlview:   TILE('#f97316', `<rect x="3.1" y="4.4" width="17.8" height="15.2" rx="2.9" fill="none" stroke="#ffffff" stroke-width="1.7"/><path d="M3.1 8.6h17.8" stroke="#ffffff" stroke-width="1.5"/><circle cx="5.7" cy="6.5" r=".9" fill="#ffffff"/><path d="M10.3 11.6l4.6 3-4.6 3z" fill="#ffffff"/>`),
   ai:         TILE('#7c5cff', `<path d="M11.4 3.4l1.7 4.9 4.9 1.7-4.9 1.7-1.7 4.9-1.7-4.9L4.8 10l4.9-1.7z" fill="${W}"/><path d="M18.2 13.6l.85 2.35 2.35.85-2.35.85-.85 2.35-.85-2.35-2.35-.85 2.35-.85z" fill="${W}" opacity=".82"/>`),
   colorpicker:TILE('#f6a623', `<circle cx="9.2" cy="10" r="4.1" fill="${W}" opacity=".9"/><circle cx="14.8" cy="10" r="4.1" fill="${W}" opacity=".68"/><circle cx="12" cy="14.8" r="4.1" fill="${W}" opacity=".5"/>`),
   viewer:     TILE('#38bdf8', `<rect x="4" y="5" width="16" height="14" rx="2.4" fill="${W}"/><circle cx="9" cy="10" r="1.7" fill="#38bdf8"/><path d="M6.4 17.6l4-4.6 3 3.2 2.2-2.3 4.2 3.7z" fill="#38bdf8"/>`),
@@ -2981,6 +2993,180 @@ APPS.code = {
   }
 };
 
+/* ---------------------------- HTML Viewer --------------------------- */
+APPS.htmlview = {
+  name: 'HTML Viewer', icon: '🧪', w: 900, h: 620,
+  mount(body, win, args){
+    const STOP = '<' + '/script>';
+    const starter = [
+      '<!DOCTYPE html>',
+      '<html lang="en">',
+      '<head>',
+      '<meta charset="utf-8">',
+      '<title>Local page</title>',
+      '<style>',
+      '  body { margin:0; padding:30px; font-family:system-ui,-apple-system,sans-serif;',
+      '         background:linear-gradient(135deg,#1e3a8a,#0b1020); color:#eef2ff; }',
+      '  h1 { margin:0 0 6px; font-size:26px; }',
+      '  p  { margin:0; opacity:.82; }',
+      '  button { margin-top:16px; padding:10px 18px; border:0; border-radius:9px;',
+      '           background:#0078d4; color:#fff; font-size:14px; cursor:pointer; }',
+      '  button:hover { background:#1a8fe3; }',
+      '</style>',
+      '</head>',
+      '<body>',
+      '  <h1>Hello from uOS</h1>',
+      '  <p>Real HTML, rendered locally. Nothing is uploaded.</p>',
+      '  <button id="b">Click me</button>',
+      '  <p id="out" style="margin-top:12px"></p>',
+      '<script>',
+      '  let n = 0;',
+      '  document.getElementById("b").onclick = () => {',
+      '    n++;',
+      '    document.getElementById("out").textContent =',
+      '      "Clicked " + n + " time" + (n === 1 ? "" : "s");',
+      '  };',
+      STOP,
+      '</body>',
+      '</html>'
+    ].join('\n');
+
+    body.innerHTML = `
+      <div class="toolbar">
+        <button class="btn primary" id="hvRun">▶ Run</button>
+        <div class="sep"></div>
+        <button class="btn" id="hvOpen">Open file…</button>
+        <button class="btn" id="hvFromFS">From Files</button>
+        <button class="btn" id="hvToFS">Save to Files</button>
+        <div class="sep"></div>
+        <button class="btn" id="hvDown">Download .html</button>
+        <button class="btn" id="hvTab">Open in browser ↗</button>
+        <div class="sep"></div>
+        <button class="switch" id="hvAuto" title="Re-render as you type"><i></i></button>
+        <span class="muted" style="font-size:12px">Auto-run</span>
+        <span class="muted" style="font-size:12px;margin-left:auto">Ctrl + Enter</span>
+      </div>
+      <div class="hsplit" id="hvSplit">
+        <textarea class="mono-area" id="hvSrc" spellcheck="false" wrap="off"></textarea>
+        <div class="hdiv" id="hvDiv" title="Drag to resize"></div>
+        <div class="hprev">
+          <iframe id="hvFrame" title="Preview" sandbox="allow-scripts allow-forms allow-modals allow-popups allow-pointer-lock"></iframe>
+          <div class="hblank" id="hvBlank"><span>Press <b>▶ Run</b> to render your HTML</span></div>
+        </div>
+      </div>
+      <div class="hstat">
+        <span class="muted" id="hvInfo">Ready</span>
+        <span class="muted" id="hvSize"></span>
+      </div>`;
+
+    const ta = $('#hvSrc', body), frame = $('#hvFrame', body), blank = $('#hvBlank', body);
+    const auto = $('#hvAuto', body), info = $('#hvInfo', body), sizeEl = $('#hvSize', body);
+    let file = args.file && FS[args.file] ? args.file : null;
+    let runNo = 0, autoT = null;
+
+    function setTitle(){
+      const t = $('.tb-title', win.el);
+      if (t) t.textContent = 'HTML Viewer — ' + (file ? file.split('/').pop() : 'untitled');
+    }
+    function showSize(){
+      const bytes = new Blob([ta.value]).size;
+      sizeEl.textContent = bytes.toLocaleString() + ' bytes';
+    }
+    function run(){
+      const code = ta.value;
+      runNo++;
+      /* trailing comment = a fresh srcdoc value, so the frame always reloads */
+      frame.srcdoc = code + '\n<' + '!-- uOS run ' + runNo + ' --' + '>';
+      blank.style.display = 'none';
+      info.textContent = 'Rendered at ' + new Date().toLocaleTimeString();
+      showSize();
+    }
+    function load(text, name){
+      ta.value = text; file = name || null; setTitle(); showSize(); run();
+    }
+
+    ta.value = file ? FS[file].content : starter;
+    ta.__focus = ta;
+    setTitle(); showSize();
+    run();
+
+    $('#hvRun', body).onclick = run;
+    ta.addEventListener('keydown', e => { if (e.ctrlKey && e.key === 'Enter'){ e.preventDefault(); run(); } });
+    ta.addEventListener('input', () => {
+      showSize();
+      if (auto.classList.contains('on')){ clearTimeout(autoT); autoT = setTimeout(run, 600); }
+    });
+    auto.onclick = () => { auto.classList.toggle('on'); if (auto.classList.contains('on')) run(); };
+
+    /* --- open from this computer --- */
+    const picker = el('input', { type: 'file', accept: '.html,.htm,.xhtml,.svg,.txt' });
+    picker.style.display = 'none';
+    picker.addEventListener('change', () => {
+      const f = picker.files && picker.files[0]; if (!f) return;
+      const fr = new FileReader();
+      fr.onload = () => { load(String(fr.result), f.name); toast('HTML Viewer', 'Opened ' + f.name); };
+      fr.readAsText(f);
+      picker.value = '';
+    });
+    body.append(picker);
+    $('#hvOpen', body).onclick = () => picker.click();
+
+    /* --- open / save in the uOS file system --- */
+    $('#hvFromFS', body).onclick = () => {
+      const files = Object.keys(FS).filter(k => FS[k] && FS[k].type === 'file' && /\.(html?|xhtml|svg|txt)$/i.test(k));
+      if (!files.length) return toast('HTML Viewer', 'No HTML files in uOS Files yet');
+      const p = prompt('Open from uOS Files:\n\n' + files.join('\n'), files[0]);
+      if (!p) return;
+      const key = FS[p] ? p : files.find(k => k.toLowerCase() === p.trim().toLowerCase());
+      if (!key) return toast('HTML Viewer', 'No such file: ' + p);
+      load(FS[key].content, key);
+    };
+    $('#hvToFS', body).onclick = () => {
+      const p = prompt('Save to uOS Files as:', file && /\.html?$/i.test(file) ? file : 'Projects/page.html');
+      if (!p) return;
+      file = p.replace(/^\/+/, '');
+      fsWrite(file, ta.value);
+      setTitle(); toast('HTML Viewer', 'Saved ' + file);
+    };
+
+    /* --- out to the real machine --- */
+    function fileName(){
+      const base = file ? file.split('/').pop() : 'page.html';
+      return /\.html?$/i.test(base) ? base : base.replace(/\.[^.]+$/, '') + '.html';
+    }
+    $('#hvDown', body).onclick = () => {
+      const url = URL.createObjectURL(new Blob([ta.value], { type: 'text/html' }));
+      const a = el('a', { href: url, download: fileName() });
+      document.body.append(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      toast('HTML Viewer', 'Downloaded ' + fileName());
+    };
+    $('#hvTab', body).onclick = () => {
+      const url = URL.createObjectURL(new Blob([ta.value], { type: 'text/html' }));
+      if (!window.open(url, '_blank')) toast('HTML Viewer', 'The browser blocked the new tab');
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    };
+
+    /* --- drag the divider --- */
+    const split = $('#hvSplit', body), div = $('#hvDiv', body);
+    let dragging = false;
+    function resizeTo(clientX){
+      const r = cssRect(split);                       // zoom-aware
+      let pct = ((clientX - r.left) / r.width) * 100;
+      ta.style.flexBasis = Math.max(15, Math.min(85, pct)) + '%';
+    }
+    div.addEventListener('pointerdown', e => {
+      dragging = true; e.preventDefault();
+      div.classList.add('drag');
+      try { div.setPointerCapture(e.pointerId); } catch(err){}
+    });
+    div.addEventListener('pointermove', e => { if (dragging) resizeTo(e.clientX); });
+    const stopDrag = () => { dragging = false; div.classList.remove('drag'); };
+    div.addEventListener('pointerup', stopDrag);
+    div.addEventListener('lostpointercapture', stopDrag);
+  }
+};
+
 /* ------------------------------ Image Viewer ------------------------ */
 APPS.viewer = {
   name: 'Photos', icon: '🖼️', w: 760, h: 580,
@@ -3438,7 +3624,7 @@ const RUN_ALIASES = {
   settings: 'settings', control: 'settings', browser: 'browser', edge: 'browser', nova: 'browser',
   ai: 'ai', chat: 'ai',
   taskmgr: 'taskmgr', task: 'taskmgr', clock: 'clock', calendar: 'calendar', camera: 'viewer',
-  media: 'media', code: 'code', run: 'run', trash: 'trash', bin: 'trash', recycle: 'trash',
+  media: 'media', code: 'code', html: 'htmlview', htmlview: 'htmlview', preview: 'htmlview', webpage: 'htmlview', run: 'run', trash: 'trash', bin: 'trash', recycle: 'trash',
   clipboard: 'clipboard', sticky: 'sticky', notes: 'sticky', qr: 'qrgen', password: 'passgen', color: 'colorpicker',
   about: 'about', info: 'about', credits: 'about'
 };
@@ -3492,7 +3678,8 @@ function openPath(path){
   const f = FS[path] || {};
   if (/^data:image/.test(f.content || '') || /\.(png|jpe?g|gif|webp|svg)$/i.test(name)) return openApp('viewer', { file: path });
   if (/\.(mp3|wav|ogg|mp4|webm)$/i.test(name)) return openApp('media', { });
-  if (/\.(js|json|html|css)$/i.test(name)) return openApp('code', { file: path });
+  if (/\.(html?|xhtml)$/i.test(name)) return openApp('htmlview', { file: path });
+  if (/\.(js|json|css)$/i.test(name)) return openApp('code', { file: path });
   if (/\.(txt|csv|md|log)$/i.test(name) || !f.type) return openApp('notepad', { file: path });
   return openApp('notepad', { file: path });
 }
