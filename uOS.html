@@ -547,7 +547,9 @@ body.tb-autohide #taskbar{transform:translateY(calc(100% - 3px));transition:tran
 body.tb-autohide #taskbar:hover{transform:none}
 body.tb-autohide.tb-top #taskbar{transform:translateY(calc(-100% + 3px))}
 body.tb-autohide.tb-top #taskbar:hover{transform:none}
-body.tb-center #taskbar{justify-content:center;position:relative}
+/* keep the bar fixed — position:relative here knocked it back into normal
+   document flow, which parked it at the top of the page instead */
+body.tb-center #taskbar{justify-content:center}
 body.tb-center #tray{position:absolute;right:8px;top:0;bottom:0;margin-left:0}
 body.tb-center #taskItems{flex:0 1 auto}
 body.tb-nolabels .taskitem .tlabel{display:none}
