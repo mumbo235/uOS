@@ -4237,24 +4237,87 @@ APPS.classmax = {
     input.style.display = 'none';
     input.addEventListener('change', async e => {
       const f = e.target.files[0]; if (!f) return;
-      fb.style.display = 'none';
+      runTag++; clearTimeout(timer);            // stop any pending checks
+      hideCard();
       fr.removeAttribute('src');
       try { fr.srcdoc = await f.text(); } catch (err){ toast('ClassroomMaxxing', 'Could not read that file'); }
     });
-    fb.append(el('div', { style: 'max-width:430px;display:flex;flex-direction:column;gap:12px;align-items:center;text-align:center' },
+    fb.append(el('div', { style: 'max-width:470px;display:flex;flex-direction:column;gap:12px;align-items:center;text-align:center' },
       el('b', { style: 'font-size:15px' }, 'ClassroomMaxxing'),
-      el('div', { class: 'muted', style: 'font-size:12.5px;line-height:1.6' },
-        'The page did not load. Keep classroommaxxing.html in the same folder as uOS.html — or open a copy directly:'),
-      el('label', { class: 'btn primary' }, 'Open a copy\u2026', input),
-      el('button', { class: 'btn', onclick: () => load() }, 'Try again')));
-    let loaded = false;
-    fr.addEventListener('load', () => { loaded = true; fb.style.display = 'none'; });
-    function load(){
-      loaded = false;
-      fb.style.display = 'none';
-      fr.removeAttribute('srcdoc');
-      fr.src = CLASSMAXX_FILE + '?v=' + Date.now();
-      setTimeout(() => { if (!loaded) fb.style.display = 'flex'; }, 5000);
+      el('div', { class: 'muted', style: 'font-size:12.5px;line-height:1.65' },
+        'This app runs classroommaxxing.html, which has to sit in the same folder as uOS.html. ',
+        'Copies of uOS shared without that file land here instead of the page — open your own copy to carry on:'),
+      el('label', { class: 'btn primary' }, 'Open a copy…', input),
+      el('button', { class: 'btn', onclick: () => load(true) }, 'Try loading it anyway')));
+
+    let loaded = false, timer = null, runTag = 0, watchForError = false;
+    function showCard(){ fb.style.display = 'flex'; }
+    function hideCard(){ fb.style.display = 'none'; }
+
+    /* A missing page still fires the iframe's "load" event, with the server's
+       error page inside — which is why a shared build used to show "not found".
+       So: HEAD first where fetch is allowed (fast, authoritative), and on
+       file:// straight to the frame with a parallel stylesheet probe. A <link>
+       either loads or errors and can never execute the file. */
+    function headExists(){
+      return fetch(CLASSMAXX_FILE, { method: 'HEAD', cache: 'no-store' }).then(r => {
+        if (r.status === 405 || r.status === 501) return 'unknown';   // host refuses HEAD
+        return r.ok ? 'ok' : 'missing';
+      }).catch(() => 'unknown');
+    }
+    function linkExists(href){
+      return new Promise(res => {
+        const link = document.createElement('link');
+        link.rel = 'stylesheet'; link.href = href;
+        let done = false;
+        const fin = v => { if (done) return; done = true; try { link.remove(); } catch(e){} res(v); };
+        link.onload = () => fin('ok');
+        link.onerror = () => fin('missing');
+        document.head.append(link);
+        setTimeout(() => fin('unknown'), 8000);
+      });
+    }
+
+    fr.addEventListener('load', () => {
+      loaded = true;
+      clearTimeout(timer);
+      if (watchForError){
+        /* we have not proven the file exists, so refuse to present an error
+           page as if it were the app */
+        let t = '';
+        try { t = (fr.contentDocument && fr.contentDocument.title) || ''; } catch(e){ t = ''; }
+        if (/error response|not found|^404|does not exist|can.t be found|ERR_/i.test(t)){ showCard(); return; }
+      }
+      hideCard();
+    });
+
+    function load(force){
+      const tag = ++runTag;
+      clearTimeout(timer);
+      watchForError = false;
+      const url = CLASSMAXX_FILE + '?v=' + Date.now();   // shared by probe + frame
+      const proceed = () => {
+        if (tag !== runTag) return;
+        hideCard();
+        loaded = false;
+        fr.removeAttribute('srcdoc');
+        fr.src = url;
+        timer = setTimeout(() => { if (!loaded && tag === runTag) showCard(); }, 6000);
+      };
+      if (!force && location.protocol !== 'file:'){
+        headExists().then(v => {
+          if (tag !== runTag) return;
+          if (v === 'missing'){ showCard(); return; }   // never show the error page
+          watchForError = v !== 'ok';
+          proceed();
+        });
+      } else {
+        /* file:// (fetch blocked) or a forced retry: show the page immediately
+           and raise the card if the parallel check finds it missing */
+        watchForError = true;
+        proceed();
+        linkExists(CLASSMAXX_FILE).then(v => { if (tag === runTag && v === 'missing') showCard(); });
+      }
     }
     body.append(input);
     load();
