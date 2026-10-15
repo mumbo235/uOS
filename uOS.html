@@ -215,6 +215,19 @@ body.touch .rs.n,body.touch .rs.s{height:16px;left:16px;right:16px}
 body.touch .rs.e,body.touch .rs.w{width:16px;top:16px;bottom:16px}
 body.touch .tb-sep{margin:0 10px}
 body.touch button,body.touch .pin,body.touch .traybtn,body.touch .dicon{-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+/* ---- virtual desktops ---- */
+#deskPager{display:flex;align-items:center;gap:4px;padding:0 6px;flex:0 0 auto}
+.desk-dot{width:22px;height:22px;border-radius:6px;font-size:11px;background:var(--field);color:var(--text-dim);display:grid;place-items:center;transition:background .12s,color .12s}
+.desk-dot:hover{background:var(--field-hover);color:var(--text)}
+.desk-dot.on{background:var(--accent);color:#fff}
+.offdesk{display:none!important}
+/* ---- snap layout picker ---- */
+#snapPick{position:fixed;z-index:720;display:none;gap:10px;padding:10px;background:var(--surface);backdrop-filter:blur(30px) saturate(160%);-webkit-backdrop-filter:blur(30px) saturate(160%);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow)}
+#snapPick.open{display:flex}
+.snap-lay{display:grid;gap:4px;width:132px;height:84px;padding:4px;border-radius:8px;background:var(--field);position:relative}
+.snap-zone{background:var(--field-hover);border-radius:5px;position:relative}
+.snap-zone.on{background:var(--accent);outline:2px solid var(--accent)}
+.snap-lay .cap{position:absolute;left:8px;bottom:4px;font-size:9.5px;color:var(--text-dim);pointer-events:none}
 #palette .pal-box{width:100%;max-width:620px;background:var(--surface);backdrop-filter:blur(34px) saturate(160%);-webkit-backdrop-filter:blur(34px) saturate(160%);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow);overflow:hidden}
 #palInput{width:100%;border:0;border-bottom:1px solid var(--border);background:none;color:var(--text);font-size:16px;padding:16px 18px;outline:none;font-family:inherit}
 #palInput::placeholder{color:var(--text-dim)}
@@ -794,8 +807,8 @@ body.cursor-lg,body.cursor-lg *{
   <div class="tb-sep"></div>
   <div id="pinned"></div>
   <div id="taskItems"></div>
-  <div id="tray">
-    <button class="traybtn" id="trayChevron" title="Show hidden icons"></button>
+  <div id="deskPager" title="Virtual desktops — Ctrl + Alt + 1…4"></div>
+  <div id="tray">    <button class="traybtn" id="trayChevron" title="Show hidden icons"></button>
     <button class="traybtn hide-sm" id="trayNet" title="Network"></button>
     <button class="traybtn hide-sm" id="trayVol" title="Volume"></button>
     <button class="traybtn" id="trayBattery" title="Battery"></button>
@@ -1460,7 +1473,7 @@ function saveSession(now){
     const list = [];
     windows.forEach(w => {
       if (!w.el || !w.el.isConnected) return;
-      list.push({ appId: w.appId, args: smallArgs(w.args), max: !!w.maximized, rect: winRect(w) });
+      list.push({ appId: w.appId, args: smallArgs(w.args), max: !!w.maximized, desk: deskOf(w), rect: winRect(w) });
     });
     store.set('session', list);
   };
@@ -1478,10 +1491,56 @@ function restoreSession(){
   sess.forEach(s => {
     if (!s || !APPS[s.appId]) return;
     try {
-      const box = openApp(s.appId, Object.assign({}, s.args || {}, { __rect: s.rect }));
+      const box = openApp(s.appId, Object.assign({}, s.args || {}, { __rect: s.rect, __desk: s.desk }));
       if (box && s.max && !box.maximized) toggleMax(box);
     } catch(e){}
   });
+}
+
+/* ---------------- virtual desktops ----------------------------------
+   Windows live on one of four desktops; only the current one is shown.
+   Ctrl+Alt+1…4 switch, Ctrl+Alt+Shift+1…4 move the active window.      */
+const DESK_COUNT = 4;
+let curDesk = Math.max(0, Math.min(DESK_COUNT - 1, Number(store.get('deskIndex', 0)) || 0));
+const deskOf = win => Math.max(0, Math.min(DESK_COUNT - 1, win && win.desk != null ? win.desk : 0));
+function paintDesks(){
+  windows.forEach(w => {
+    const on = deskOf(w) === curDesk;
+    if (w.el) w.el.classList.toggle('offdesk', !on);
+    if (w.taskEl) w.taskEl.classList.toggle('offdesk', !on);
+  });
+  $$('#deskPager .desk-dot').forEach((d, i) => d.classList.toggle('on', i === curDesk));
+}
+function buildDeskPager(){
+  const p = $('#deskPager');
+  if (!p) return;
+  p.innerHTML = '';
+  for (let i = 0; i < DESK_COUNT; i++){
+    const d = el('button', { class: 'desk-dot' + (i === curDesk ? ' on' : ''), title: 'Desktop ' + (i + 1) }, String(i + 1));
+    d.onclick = () => switchDesk(i);
+    p.append(d);
+  }
+}
+function switchDesk(n){
+  const next = Math.max(0, Math.min(DESK_COUNT - 1, n));
+  if (next === curDesk) return;
+  curDesk = next;
+  store.set('deskIndex', curDesk);
+  paintDesks();
+  toast('Desktop', 'Desktop ' + (curDesk + 1));
+}
+function moveWinToDesk(win, n){
+  if (!win) return;
+  win.desk = Math.max(0, Math.min(DESK_COUNT - 1, n));
+  paintDesks();
+  saveSession(true);
+  toast('Windows', (win.app && win.app.name ? win.app.name : 'Window') + ' → desktop ' + (win.desk + 1));
+}
+function moveMenu(win){
+  showContext(showContext.lastX || 300, showContext.lastY || 300, [0,1,2,3].map(i => ({
+    label: (deskOf(win) === i ? '✓ ' : '') + 'Desktop ' + (i + 1),
+    act: () => moveWinToDesk(win, i)
+  })));
 }
 
 /* ------------------------------ window manager ---------------------- */
@@ -1494,7 +1553,8 @@ function createWindow(appId, app, args = {}){
   const remembered = args.__rect || winMem[appId] || null;
   const win = {
     id, appId, app, args: args, el: null, body: null, taskEl: null, startedAt: Date.now(),
-    cleanup: null, minimized: false, maximized: false, prevRect: null
+    cleanup: null, minimized: false, maximized: false, prevRect: null,
+    desk: (args.__desk != null ? Math.max(0, Math.min(DESK_COUNT - 1, args.__desk)) : curDesk)
   };
 
   /* never open a window larger than the screen can show */
@@ -7061,6 +7121,7 @@ function makeTaskItem(win){
     e.preventDefault(); e.stopPropagation();
     showContext(e.clientX, e.clientY, [
       { label: 'Pin to taskbar', act: () => { pinApp(win.appId); toast('Taskbar', 'Pinned ' + win.app.name); } },
+      { label: 'Move to desktop…', act: () => moveMenu(win) },
       { sep: true },
       { label: 'Close window', act: () => closeWin(win) }
     ]);
@@ -8021,6 +8082,20 @@ $('#palette').addEventListener('click', e => { if (e.target && e.target.id === '
 /* global shortcuts */
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape'){ toggleStart(false); hideContext(); }
+  if (e.ctrlKey && e.altKey && /^[1-4]$/.test(e.key)){
+    e.preventDefault();
+    if (e.shiftKey && activeWin) moveWinToDesk(activeWin, +e.key - 1);
+    else switchDesk(+e.key - 1);
+    return;
+  }
+  if (e.ctrlKey && e.altKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')){
+    e.preventDefault();
+    const dir = e.key === 'ArrowRight' ? 1 : -1;
+    const n = (curDesk + dir + DESK_COUNT) % DESK_COUNT;
+    if (e.shiftKey && activeWin) moveWinToDesk(activeWin, n);
+    else switchDesk(n);
+    return;
+  }
   if (e.ctrlKey && e.altKey && e.key.toLowerCase() === 't'){ e.preventDefault(); openApp('terminal'); }
   if (e.ctrlKey && e.altKey && e.key.toLowerCase() === 'g'){ e.preventDefault(); openApp('arcade'); }
   if (e.ctrlKey && e.altKey && e.key.toLowerCase() === 'r'){ e.preventDefault(); openApp('run'); }
@@ -8299,6 +8374,8 @@ renderPinned();
 renderDesktopIcons();
 renderNotes();
 renderWidgets();
+buildDeskPager();
+paintDesks();
 updateClock();
 renderStartMenu();
 renderRecents();
