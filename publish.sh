@@ -3,21 +3,23 @@
 # Publishes uOS to GitHub: pushes main, tags v3.0, creates a release and
 # attaches the zip.
 #
-#   usage:  bash publish.sh <your-username>/uos
+#   usage:  bash publish.sh <your-username>/uOS
 #
 # The token is looked up in this order:
 #   1. $GH_TOKEN                       (one-off override)
-#   2. the macOS Keychain              (set up once — see below)
+#   2. the macOS Keychain              (only on macOS)
 #   3. ~/.git-credentials              (Linux git credential-store)
 #   4. an interactive prompt           (hidden input)
 #
 # It is passed to git through an in-memory credential helper — never in a URL,
 # never in the remote, never in your shell history.
 #
-# ONE-TIME SETUP so you never paste a token again (macOS):
-#     git config --global credential.helper osxkeychain
-#     # then run the script once and paste the token when GitHub asks;
-#     # the Keychain remembers it and every run after that needs no token.
+# ONE-TIME SETUP so you never paste a token again:
+#   macOS:  git config --global credential.helper osxkeychain
+#   Linux:  git config --global credential.helper store
+# then run the script once and paste the token; it is remembered and every
+# run after that needs no token. (A missing helper name is harmless — the
+# script resets the helper list, so you will not see "not a git command".)
 # ---------------------------------------------------------------------------
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -28,11 +30,11 @@ if [ -z "$REPO" ]; then
   exit 1
 fi
 
+# always rebuild, so the release asset always matches the current source
 ZIP="uos-3.0.zip"
-if [ ! -f "$ZIP" ]; then
-  echo "· building $ZIP"
-  zip -q -9 "$ZIP" uOS.html README.md RELEASE_NOTES.md
-fi
+echo "· building $ZIP"
+rm -f "$ZIP"
+zip -q -9 "$ZIP" uOS.html README.md RELEASE_NOTES.md
 
 # --------------------------------------------------------- find the token
 TOKEN="${GH_TOKEN:-}"
@@ -58,8 +60,9 @@ TOKEN="$(printf '%s' "$TOKEN" | tr -d '[:space:]')"
 # ---------------------------------------------------------- sanity check
 if [ -z "$TOKEN" ]; then
   echo "! no token available." >&2
-  echo "  Either run once with GH_TOKEN=github_pat_... or set up the Keychain:" >&2
-  echo "      git config --global credential.helper osxkeychain" >&2
+  echo "  Either run once with GH_TOKEN=github_pat_... or let git remember it:" >&2
+  echo "      git config --global credential.helper store     # Linux" >&2
+  echo "      git config --global credential.helper osxkeychain  # macOS" >&2
   exit 1
 fi
 
