@@ -52,21 +52,22 @@ python3 -m http.server 8000
 ## Publishing a release
 
 ```bash
-bash publish.sh <your-username>/uos
+bash publish.sh <your-username>/uOS
 ```
 
 Pushes `main`, tags `v3.0`, creates the GitHub release from `RELEASE_NOTES.md`
-and uploads `uos-3.0.zip`.
+and uploads a freshly built `uos-3.0.zip`. Re-running it is safe: it updates the
+existing release and replaces the asset instead of failing.
 
-**One-time setup so it never asks for a token again (macOS):**
+**One-time setup so it never asks for a token again** — pick your platform:
 
 ```bash
-git config --global credential.helper osxkeychain
+git config --global credential.helper store        # Linux (plaintext in ~/.git-credentials)
+git config --global credential.helper osxkeychain  # macOS (Keychain)
 ```
 
-Run the script once and paste the token when GitHub asks — the Keychain
-remembers it, and `bash publish.sh <user>/uos` needs no token after that.
-(On Linux use `git config --global credential.helper store` once instead.)
+Run the script once and paste the token when asked; it is remembered and
+`bash publish.sh <user>/uOS` needs no token after that.
 
 ## Notes
 
