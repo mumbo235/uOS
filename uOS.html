@@ -144,7 +144,8 @@ button{font-family:inherit;color:inherit;cursor:pointer;border:none;background:n
 .rs.nw{top:0;left:0;width:12px;height:12px;cursor:nwse-resize}
 .rs.se{bottom:0;right:0;width:14px;height:14px;cursor:nwse-resize}
 .rs.sw{bottom:0;left:0;width:14px;height:14px;cursor:nesw-resize}
-#snapHint{position:fixed;border:2px solid var(--accent);background:var(--accent-soft);border-radius:6px;z-index:700;display:none;pointer-events:none}
+#snapHint{position:fixed;border:2px solid var(--accent);background:var(--accent-soft);border-radius:6px;z-index:1900;display:none;pointer-events:none}
+#snapPick{z-index:1901}
 
 /* ============ TASKBAR (Windows 10 style) ============ */
 #taskbar{
@@ -798,6 +799,7 @@ body.cursor-lg,body.cursor-lg *{
   <div id="windows"></div>
 </div>
 <div id="snapHint"></div>
+<div id="snapPick"></div>
 
 <!-- ================= TASKBAR (Windows 10 style) ================= -->
 <div id="taskbar">
@@ -1543,6 +1545,60 @@ function moveMenu(win){
   })));
 }
 
+/* ---------------- snap layouts (drag to the top edge) ---------------
+   The classic Windows 11 gesture: drag a window to the top of the screen
+   and a small picker appears; release over one of its zones to snap.   */
+const SNAP_LAYOUTS = [
+  { name: 'Halves',    zones: [[0,0,.5,1],[.5,0,.5,1]] },
+  { name: 'Thirds',    zones: [[0,0,1/3,1],[1/3,0,1/3,1],[2/3,0,1/3,1]] },
+  { name: 'Quarters',  zones: [[0,0,.5,.5],[.5,0,.5,.5],[0,.5,.5,.5],[.5,.5,.5,.5]] },
+  { name: 'Main+side', zones: [[0,0,.62,1],[.62,0,.38,.5],[.62,.5,.38,.5]] }
+];
+function buildSnapPicker(){
+  const p = $('#snapPick');
+  if (!p) return;
+  p.innerHTML = '';
+  SNAP_LAYOUTS.forEach(lay => {
+    const box = el('div', { class: 'snap-lay' });
+    lay.zones.forEach(z => {
+      const zd = el('div', { class: 'snap-zone', 'data-z': z.join(',') });
+      zd.style.cssText = 'position:absolute;left:' + (z[0] * 100).toFixed(2) + '%;top:' + (z[1] * 100).toFixed(2) +
+        '%;width:' + (z[2] * 100).toFixed(2) + '%;height:' + (z[3] * 100).toFixed(2) + '%';
+      box.append(zd);
+    });
+    box.append(el('div', { class: 'cap' }, lay.name));
+    p.append(box);
+  });
+}
+function showSnapPicker(){
+  const p = $('#snapPick');
+  if (!p.children.length) buildSnapPicker();
+  p.classList.add('open');
+  p.style.top = '6px';
+  p.style.left = Math.max(6, Math.round((VW() - p.offsetWidth) / 2)) + 'px';
+}
+function hideSnapPicker(){
+  const p = $('#snapPick');
+  if (!p) return;
+  p.classList.remove('open');
+  $$('.snap-zone.on', p).forEach(z => z.classList.remove('on'));
+}
+/* which zone is under the pointer? returns a rect in CSS pixels */
+function zoneUnder(clientX, clientY){
+  const p = $('#snapPick');
+  if (!p || !p.classList.contains('open')) return null;
+  let hit = null;
+  $$('.snap-zone', p).forEach(z => {
+    const r = cssRect(z);
+    if (clientX >= r.left && clientX <= r.right && clientY >= r.top && clientY <= r.bottom) hit = z;
+  });
+  $$('.snap-zone', p).forEach(z => z.classList.toggle('on', z === hit));
+  if (!hit) return null;
+  const f = hit.dataset.z.split(',').map(Number);
+  const availH = VH() - TB();
+  return { x: Math.round(f[0] * VW()), y: Math.round(f[1] * availH), w: Math.round(f[2] * VW()), h: Math.round(f[3] * availH) };
+}
+
 /* ------------------------------ window manager ---------------------- */
 const windows = new Map();      // id -> win
 let activeWin = null, zTop = 100;
@@ -1695,13 +1751,26 @@ function makeDraggable(win){
       ny = clamp(ny, 0, VH() - 90);
       win.el.style.left = nx + 'px';
       win.el.style.top = ny + 'px';
-      // edge snap hint
+      // edge snap hint / snap layout picker
       const hint = $('#snapHint');
       snap = null;
-      if (settings.snap){
-        if (ev.clientY <= 4) snap = { x:0, y:0, w:VW(), h:VH() - TB() };
-        else if (ev.clientX <= 4) snap = { x:0, y:0, w:VW() / 2, h:VH() - TB() };
-        else if (ev.clientX >= VW() - 4) snap = { x:VW() / 2, y:0, w:VW() / 2, h:VH() - TB() };
+      const pickerEl = $('#snapPick');
+      const pickerOpen = pickerEl.classList.contains('open');
+      if (settings.snap && settings.snapLayouts && (ev.clientY <= 8 || pickerOpen)){
+        showSnapPicker();
+        snap = zoneUnder(ev.clientX, ev.clientY);
+        /* keep it open while the pointer is over it, close it once you leave */
+        if (!snap){
+          const pb = cssRect(pickerEl);
+          if (ev.clientY > pb.bottom + 30) hideSnapPicker();
+        }
+      } else {
+        hideSnapPicker();
+        if (settings.snap){
+          if (ev.clientY <= 4) snap = { x:0, y:0, w:VW(), h:VH() - TB() };
+          else if (ev.clientX <= 4) snap = { x:0, y:0, w:VW() / 2, h:VH() - TB() };
+          else if (ev.clientX >= VW() - 4) snap = { x:VW() / 2, y:0, w:VW() / 2, h:VH() - TB() };
+        }
       }
       if (snap){
         hint.style.display = 'block';
@@ -1711,6 +1780,7 @@ function makeDraggable(win){
     const up = () => {
       bar.removeEventListener('pointermove', move);
       bar.removeEventListener('pointerup', up);
+      hideSnapPicker();
       $('#snapHint').style.display = 'none';
       if (snap){
         win.prevRect = { left: r.left, top: r.top, width: r.width, height: r.height };
