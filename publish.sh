@@ -82,7 +82,9 @@ fi
 
 export GIT_TOKEN="$TOKEN"
 CRED='!f() { echo username=x-access-token; echo password="$GIT_TOKEN"; }; f'
-gpush(){ git -c credential.helper="$CRED" "$@"; }
+# the empty credential.helper= resets any global helper first, so a helper that
+# doesn't exist on this machine (e.g. osxkeychain on Linux) can't spew errors
+gpush(){ git -c credential.helper= -c credential.helper="$CRED" "$@"; }
 
 git remote remove origin 2>/dev/null || true
 git remote add origin "https://github.com/$REPO.git"
@@ -120,28 +122,50 @@ gpush push -f origin v3.0
 # ----------------------------------------------------------- the release
 echo "· creating the release"
 BODY=$(python3 -c 'import json; print(json.dumps(open("RELEASE_NOTES.md").read()))')
-RESP=$(curl -sS -X POST "https://api.github.com/repos/$REPO/releases" \
+API="https://api.github.com/repos/$REPO"
+
+# -L so a renamed repo (GitHub redirects the old name) still resolves.
+RESP=$(curl -sSL -X POST "$API/releases" \
   -H "Authorization: Bearer $TOKEN" -H "Accept: application/vnd.github+json" \
   -d "{\"tag_name\":\"v3.0\",\"target_commitish\":\"main\",\"name\":\"uOS 3.0\",\"body\":$BODY,\"draft\":false,\"prerelease\":false}")
 
-UPLOAD=$(printf '%s' "$RESP" | python3 -c 'import json,sys
+# if a v3.0 release already exists, update it instead of failing
+if ! printf '%s' "$RESP" | grep -q '"upload_url"'; then
+  case "$RESP" in
+    *already_exists*)
+      echo "· release v3.0 already exists — updating it"
+      RESP=$(curl -sSL -X PATCH "$API/releases/tags/v3.0" \
+        -H "Authorization: Bearer $TOKEN" -H "Accept: application/vnd.github+json" \
+        -d "{\"name\":\"uOS 3.0\",\"body\":$BODY,\"draft\":false,\"prerelease\":false}") ;;
+  esac
+fi
+
+# stdout only — never merge stderr in, or a message would end up in the URL
+pull(){ printf '%s' "$RESP" | python3 -c 'import json,sys
 try:
   d = json.load(sys.stdin)
 except Exception:
   sys.exit(0)
-if d.get("upload_url"):
-  print(d["upload_url"].split("{")[0])
-  open("/tmp/opencode/rel_url.txt","w").write(d.get("html_url",""))
-elif d.get("message"):
-  sys.stderr.write("! GitHub said: " + str(d.get("message")) + "\n")' 2>&1 || true)
+print(d.get(sys.argv[1]) or "")' "$1"; }
+
+UPLOAD=$(pull upload_url)
+UPLOAD="${UPLOAD%%\{*}"
+REL_URL=$(pull html_url)
+MSG=$(pull message)
 
 if [ -n "$UPLOAD" ]; then
   echo "· uploading $ZIP"
-  curl -sS -X POST "$UPLOAD?name=$ZIP" \
+  UP=$(curl -sSL -X POST "$UPLOAD?name=$ZIP" \
     -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/zip" \
-    --data-binary "@$ZIP" >/dev/null
-  echo "· done → $(cat /tmp/opencode/rel_url.txt 2>/dev/null)"
+    --data-binary "@$ZIP")
+  case "$UP" in
+    *'"state":"uploaded"'*|*'"size"'*) echo "· asset uploaded" ;;
+    *) echo "! asset upload said: $(printf '%s' "$UP" | head -c 160)" ;;
+  esac
+  echo
+  echo "done → ${REL_URL:-https://github.com/$REPO/releases}"
 else
-  echo "· release response: $(printf '%s' "$RESP" | head -c 200)"
+  [ -n "$MSG" ] && echo "! GitHub said: $MSG" >&2
+  echo "· raw response: $(printf '%s' "$RESP" | head -c 200)"
   echo "· check https://github.com/$REPO/releases"
 fi
