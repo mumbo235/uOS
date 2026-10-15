@@ -571,6 +571,22 @@ body.cursor-lg,body.cursor-lg *{
 .settings-body .card{gap:0}
 .settings-body .card + .card{margin-top:2px}
 
+/* ---- browser tabs ---- */
+#bPages{flex:1;min-height:0;display:flex;flex-direction:column}
+.tabpage{flex:1;min-height:0;display:none;flex-direction:column}
+.tabpage.on{display:flex}
+.tabstrip{display:flex;align-items:flex-end;gap:3px;padding:6px 6px 0;background:var(--surface-2);border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none}
+.tabstrip::-webkit-scrollbar{display:none}
+.btab{display:flex;align-items:center;gap:8px;max-width:200px;padding:7px 7px 7px 11px;border-radius:8px 8px 0 0;color:var(--text-dim);font-size:12px;white-space:nowrap;cursor:default;border:1px solid transparent;border-bottom:none}
+.btab:hover{background:var(--field-hover)}
+.btab.on{background:var(--surface-solid);color:var(--text);border-color:var(--border)}
+.btab .t{overflow:hidden;text-overflow:ellipsis;max-width:140px}
+.btab .x{width:18px;height:18px;border-radius:5px;display:grid;place-items:center;font-size:10px;color:var(--text-dim);flex:0 0 auto}
+.btab .x:hover{background:#e81123;color:#fff}
+.tabnew{width:30px;height:28px;border-radius:7px;display:grid;place-items:center;color:var(--text-dim);font-size:15px;margin-bottom:2px}
+.tabnew:hover{background:var(--field-hover);color:var(--text)}
+
+/* ---- Browser (legacy classes kept for the CDN loader) ---- */
 /* ---- Local game loader ---- */
 .drop-zone{margin-top:10px;padding:24px;border:2px dashed var(--border);border-radius:12px;text-align:center;font-size:12.5px;color:var(--text-dim);transition:border-color .15s,background .15s}
 .drop-zone.over{border-color:var(--accent);background:var(--accent-soft);color:var(--text)}
@@ -1951,36 +1967,37 @@ APPS.settings = {
 /* ------------------------------- Browser ---------------------------- */
 const CDN = 'https://cdn.jsdelivr.net/';
 APPS.browser = {
-  name: 'Nova Browser', icon: '🌐', w: 940, h: 640,
+  name: 'Nova Browser', icon: '🌐', w: 980, h: 680,
   mount(body, win){
     body.innerHTML = `<div class="brw">
+      <div class="tabstrip" id="brTabs"></div>
       <div class="toolbar">
         <button class="btn" id="bBack" title="Back">←</button>
-        <button class="btn" id="bHome" title="New tab">⌂</button>
-        <input class="field" id="bUrl" style="flex:1;min-width:120px" placeholder="Search or enter address" spellcheck="false" autocomplete="off">
-        <button class="btn" id="bOpenTab" title="Open this page in your real browser (use this if the page is blank)">Open ↗</button>
         <button class="btn" id="bReload" title="Reload">⟳</button>
+        <input class="field" id="bUrl" style="flex:1;min-width:120px" placeholder="Search or enter address" spellcheck="false" autocomplete="off">
+        <button class="btn" id="bOpenTab" title="Open this page in your real browser">Open ↗</button>
         <button class="btn primary" id="bGo">Go</button>
       </div>
       <div class="brw-bar" id="bWarn" style="display:none">
-        <span>Blank page? This site refuses to be embedded.</span>
-        <button class="btn" id="bExt">Open in new tab ↗</button>
+        <span>Blank page? This site refuses to be embedded — open it in your real browser instead.</span>
+        <button class="btn" id="bExt">Open ↗</button>
       </div>
-      <div class="brw-home" id="bHomeView"></div>
-      <iframe class="brw-frame" id="bFrame" style="display:none"
-        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals allow-downloads allow-presentation"></iframe>
+      <div id="bPages"></div>
     </div>`;
-    const frame = $('#bFrame', body), homeV = $('#bHomeView', body), url = $('#bUrl', body), warn = $('#bWarn', body), stack = [];
-    let clockTimer = null;
-    /* every one of these is verified to allow embedding */
+
+    const strip = $('#brTabs', body), pages = $('#bPages', body), urlbar = $('#bUrl', body), warn = $('#bWarn', body);
     const LINKS = [
       ['Wikipedia', 'https://en.m.wikipedia.org'],
       ['Bing', 'https://www.bing.com'],
       ['Archive.org', 'https://archive.org'],
       ['jsDelivr', 'https://www.jsdelivr.com'],
       ['Maps', 'https://www.openstreetmap.org/export/embed.html?bbox=-0.25,51.42,0.05,51.58'],
-      ['Example', 'https://example.com']
+      ['Example', 'https://example.com'],
+      ['Random wiki', 'https://en.m.wikipedia.org/wiki/Special:Random']
     ];
+    const tabs = [];
+    let active = null, seq = 0;
+
     function toUrl(v){
       v = (v || '').trim();
       if (!v) return null;
@@ -1988,52 +2005,141 @@ APPS.browser = {
       if (/^[\w-]+(\.[\w-]+)+([/?#].*)?$/.test(v)) return 'https://' + v;
       return 'https://www.bing.com/search?q=' + encodeURIComponent(v);
     }
-    function renderHome(){
-      frame.style.display = 'none';
-      frame.removeAttribute('src');
-      warn.style.display = 'none';
-      homeV.style.display = 'flex';
-      homeV.innerHTML = '';
+    function hostOf(u){ try { return new URL(u).hostname.replace(/^www\./, ''); } catch(e){ return String(u); } }
+
+    /* ------------------------------- tabs --------------------------- */
+    function newTab(url){
+      const id = 'bt' + (++seq);
+      const page = el('div', { class: 'tabpage', 'data-id': id });
+      const homeEl = el('div', { class: 'brw-home' });
+      const frame = el('iframe', { class: 'brw-frame', style: 'display:none' });
+      frame.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals allow-downloads allow-presentation');
+      page.append(homeEl, frame);
+      pages.append(page);
+
+      const t = { id: id, page: page, home: homeEl, frame: frame, url: null, title: 'New tab', stack: [] };
+      frame.addEventListener('load', function(){
+        let title = t.url ? hostOf(t.url) : 'New tab';
+        try { if (frame.contentDocument && frame.contentDocument.title) title = frame.contentDocument.title; } catch(e){}
+        t.title = title || 'New tab';
+        drawTabs();
+      });
+
+      tabs.push(t);
+      buildHome(t);
+      activate(id);
+      if (url) navigateIn(t, url);
+      else setTimeout(function(){ const i = t.home.querySelector('input'); if (i) i.focus(); }, 40);
+      updateClocks();
+      return t;
+    }
+    function buildHome(t){
+      t.home.innerHTML = '';
       const clock = el('div', { class: 'nt-clock' }, '--:--');
       const date = el('div', { class: 'nt-date' }, '');
-      const tick = () => {
-        const d = new Date();
-        clock.textContent = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        date.textContent = d.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
-      };
-      tick();
-      clearInterval(clockTimer);
-      clockTimer = setInterval(tick, 1000);
       const search = el('div', { class: 'nt-search' },
         el('span', { html: sysIcon('search') }),
-        el('input', { id: 'ntInput', placeholder: 'Search the web or type an address', spellcheck: 'false', autocomplete: 'off' }));
+        el('input', { placeholder: 'Search the web or type an address', spellcheck: 'false', autocomplete: 'off' }));
       const links = el('div', { class: 'nt-links' });
-      LINKS.forEach(([n, u]) => { const b = el('button', { class: 'nt-link' }, n); b.onclick = () => navigate(u); links.append(b); });
-      homeV.append(el('div', { class: 'newtab' }, clock, date, search, links,
-        el('div', { class: 'nt-note' }, 'Searching uses Bing, which allows embedding. Google, YouTube and DuckDuckGo block it — those stay blank in the frame, so use “Open in new tab”.')));
-      const inp = $('#ntInput', homeV);
-      inp.addEventListener('keydown', e => { if (e.key === 'Enter'){ const u = toUrl(inp.value); if (u) navigate(u); } });
-      setTimeout(() => inp.focus(), 40);
+      LINKS.forEach(function(pair){
+        const b = el('button', { class: 'nt-link' }, pair[0]);
+        b.onclick = function(){ navigateIn(t, pair[1]); };
+        links.append(b);
+      });
+      t.home.append(el('div', { class: 'newtab' }, clock, date, search, links,
+        el('div', { class: 'nt-note' }, 'Searches use Bing, which allows embedding. Sites that block embedding (Google, YouTube…) stay blank in the frame — use “Open ↗” for those.')));
+      const inp = search.querySelector('input');
+      inp.addEventListener('keydown', function(e){ if (e.key === 'Enter'){ const u = toUrl(inp.value); if (u) navigateIn(t, u); } });
     }
-    function show(u){
-      url.value = u;
-      clearInterval(clockTimer);
-      homeV.style.display = 'none';
-      frame.style.display = 'block';
+    function activate(id){
+      const t = tabs.find(function(x){ return x.id === id; }) || tabs[0];
+      if (!t) return;
+      active = t;
+      pages.querySelectorAll('.tabpage').forEach(function(p){ p.classList.toggle('on', p === t.page); });
+      urlbar.value = t.url || '';
+      warn.style.display = t.url ? 'flex' : 'none';
+      drawTabs();
+    }
+    function navigateIn(t, v){
+      const u = toUrl(v);
+      if (!u) return;
+      t.stack.push(u);
+      t.url = u;
+      urlbar.value = u;
+      t.home.style.display = 'none';
+      t.frame.style.display = 'block';
+      t.frame.setAttribute('src', u);
+      t.title = hostOf(u);
       warn.style.display = 'flex';
-      frame.src = u;
+      drawTabs();
     }
-    function navigate(v){ const u = toUrl(v); if (!u) return; stack.push(u); show(u); }
-    $('#bGo', body).onclick = () => navigate(url.value);
-    $('#bHome', body).onclick = renderHome;
-    $('#bReload', body).onclick = () => { if (frame.src) frame.src = frame.src; };
-    const openReal = () => { const u = url.value || frame.getAttribute('src'); if (u && /^https?:/i.test(u)) window.open(u, '_blank'); };
+    function goBack(t){
+      if (t.stack.length < 2){
+        t.stack = []; t.url = null;
+        t.frame.removeAttribute('src');
+        t.frame.style.display = 'none';
+        t.home.style.display = 'flex';
+        urlbar.value = '';
+        warn.style.display = 'none';
+        t.title = 'New tab';
+        drawTabs();
+        return;
+      }
+      t.stack.pop();
+      const prev = t.stack[t.stack.length - 1];
+      t.url = prev;
+      urlbar.value = prev;
+      t.frame.setAttribute('src', prev);
+      t.title = hostOf(prev);
+      drawTabs();
+    }
+    function closeTab(id){
+      const i = tabs.findIndex(function(x){ return x.id === id; });
+      if (i < 0) return;
+      const t = tabs[i];
+      const wasActive = active === t;
+      t.page.remove();
+      tabs.splice(i, 1);
+      if (!tabs.length){ newTab(); return; }
+      if (wasActive) activate(tabs[Math.max(0, i - 1)].id);
+      else drawTabs();
+    }
+    function drawTabs(){
+      strip.innerHTML = '';
+      tabs.forEach(function(t){
+        const b = el('div', { class: 'btab' + (active === t ? ' on' : ''), title: t.title });
+        b.append(el('span', { class: 't' }, t.title));
+        const x = el('button', { class: 'x', title: 'Close tab' }, '✕');
+        x.onclick = function(e){ e.stopPropagation(); closeTab(t.id); };
+        b.append(x);
+        b.onclick = function(){ activate(t.id); };
+        strip.append(b);
+      });
+      const plus = el('button', { class: 'tabnew', title: 'New tab' }, '＋');
+      plus.onclick = function(){ newTab(); };
+      strip.append(plus);
+    }
+
+    /* ----------------------------- toolbar -------------------------- */
+    $('#bGo', body).onclick = function(){ if (active) navigateIn(active, urlbar.value); };
+    urlbar.addEventListener('keydown', function(e){ if (e.key === 'Enter' && active) navigateIn(active, urlbar.value); });
+    $('#bBack', body).onclick = function(){ if (active) goBack(active); };
+    $('#bReload', body).onclick = function(){ if (active && active.url) active.frame.setAttribute('src', active.url); };
+    const openReal = function(){ if (active && active.url) window.open(active.url, '_blank'); };
     $('#bExt', body).onclick = openReal;
     $('#bOpenTab', body).onclick = openReal;
-    $('#bBack', body).onclick = () => { stack.pop(); const prev = stack[stack.length - 1]; if (prev) show(prev); else renderHome(); };
-    url.addEventListener('keydown', e => { if (e.key === 'Enter') navigate(url.value); });
-    renderHome();
-    return () => clearInterval(clockTimer);
+
+    function updateClocks(){
+      const d = new Date();
+      const c = clockText(d);
+      pages.querySelectorAll('.nt-clock').forEach(function(n){ n.textContent = c.time; });
+      pages.querySelectorAll('.nt-date').forEach(function(n){ n.textContent = d.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' }); });
+    }
+    updateClocks();
+    const clockTimer = setInterval(updateClocks, 1000);
+
+    newTab();
+    return function(){ clearInterval(clockTimer); };
   }
 };
 
@@ -3237,52 +3343,6 @@ document.addEventListener('keyup', e => {
   }
 });
 
-/* ------------------------------ Local Games ------------------------- */
-/* Runs a game straight from your own disk. Nothing is uploaded, nothing
-   is bundled, nothing is stored in uOS — it is just a file opener.       */
-async function buildLocalGame(files){
-  const list = [...files];
-  const htmlFiles = list.filter(f => /\.html?$/i.test(f.name));
-  if (!htmlFiles.length) return null;
-  const entry = htmlFiles.find(f => /(^|\/)index\.html?$/i.test(f.name)) || htmlFiles[0];
-  const urls = new Map();
-  list.forEach(f => urls.set(f.name, URL.createObjectURL(f)));
-  let html = await entry.text();
-  // point relative assets at their blob URLs (handles multi-file games)
-  html = html.replace(/(src|href)\s*=\s*(["'])([^"'>]+)\2/gi, (m, attr, q, p) => {
-    if (/^(https?:|data:|blob:|#|\/\/|javascript:)/i.test(p)) return m;
-    const base = p.split('/').pop();
-    let hit = null;
-    for (const [n, u] of urls){
-      if (n === p || n.endsWith('/' + p) || n.split('/').pop() === base){ hit = u; break; }
-    }
-    return hit ? attr + '=' + q + hit + q : m;
-  });
-  return { name: entry.name.split('/').pop(), html: html };
-}
-function openLocalGame(name, html){
-  createWindow('local_' + Date.now(), {
-    name: name || 'Local game', icon: '📂', w: 900, h: 660,
-    mount(body){
-      body.innerHTML = `<div class="brw">
-        <div class="toolbar">
-          <span class="tico" style="font-size:15px">📂</span>
-          <span class="muted" style="font-size:12px;overflow:hidden;text-overflow:ellipsis">Local file · ${String(name).slice(0, 40)}</span>
-          <button class="btn" id="lgReload" style="margin-left:auto">Reload</button>
-          <button class="btn" id="lgPick">Open another…</button>
-        </div>
-        <iframe class="brw-frame" id="lgFrame"
-          sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals allow-downloads allow-pointer-lock allow-presentation"></iframe>
-      </div>`;
-      const fr = $('#lgFrame', body);
-      const load = () => { fr.srcdoc = html; };
-      $('#lgReload', body).onclick = load;
-      $('#lgPick', body).onclick = () => openApp('localgames');
-      load();
-    }
-  }, {});
-}
-
 /* =====================================================================
    DESKTOP WIDGETS
    ===================================================================== */
@@ -3527,8 +3587,7 @@ APPS.classmax = {
   name: 'ClassroomMaxxing', icon: '\u{1F393}', w: 1020, h: 720, single: true,
   mount(body){
     body.innerHTML = `<div class="brw" style="position:relative">
-      <iframe class="brw-frame" id="cxFrame" title="classroommaxxing"
-        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals allow-downloads allow-pointer-lock allow-presentation"></iframe>
+      <iframe class="brw-frame" id="cxFrame" title="classroommaxxing"></iframe>
       <div id="cxFallback" style="display:none;position:absolute;inset:0;background:var(--surface-solid);align-items:center;justify-content:center;padding:30px"></div>
     </div>`;
     const fr = $('#cxFrame', body), fb = $('#cxFallback', body);
