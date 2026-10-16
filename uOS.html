@@ -1342,8 +1342,12 @@ const settings = Object.assign({
   /* power & network */
   sleepMin: 0, lockPin: '', powerMode: 'balanced', wifi: true,
   /* misc */
-  highContrast: false, showTour: true, updateCheck: true, aiCloud: true
+  highContrast: false, showTour: true, updateCheck: true
 }, store.get('settings', {}));
+
+/* settings we no longer support get dropped on load, so they cannot linger
+   from an older build (the AI "cloud" toggle is now always on) */
+if ('aiCloud' in settings){ delete settings.aiCloud; store.set('settings', settings); }
 
 /* interface font choices + taskbar heights, used by Personalization / Zoom */
 const FONTS = {
@@ -4286,25 +4290,18 @@ APPS.ai = {
     $('#aiLogo', body).innerHTML = iconHTML('ai', '✨');
     /* what leaves this device, stated plainly */
     const privacyEl = $('#aiPrivacy', body);
+    /* Always on, and not user-toggleable: prompts go to the configured service
+       (the keyless third-party one until you add your own provider). The host is
+       named here so it is never a surprise. */
     function paintPrivacy(){
       let host = AI_BASE;
       try { host = new URL(AI_BASE).host; } catch(e){}
       const custom = !!AI_KEY;
       privacyEl.innerHTML = '';
-      const swEl = el('button', { class: 'switch' + (settings.aiCloud ? ' on' : ''), title: 'Allow sending prompts' }, el('i'));
-      swEl.onclick = () => {
-        settings.aiCloud = !settings.aiCloud;
-        saveSettings();
-        swEl.classList.toggle('on', settings.aiCloud);
-        paintPrivacy();
-      };
       privacyEl.append(
         el('span', { style: 'flex:1;min-width:0' },
-          settings.aiCloud
-            ? (custom ? 'Prompts go to your own provider (' + host + ').'
-                      : 'Prompts are sent to a third-party service (' + host + ') — it needs no key. Add your own provider above if you would rather not.')
-            : 'Cloud AI is off — nothing leaves this device.'),
-        swEl);
+          custom ? 'Prompts go to your own provider (' + host + ').'
+                 : 'Prompts are sent to a third-party service (' + host + ') — it needs no key. Add your own provider above if you would rather not.'));
     }
     paintPrivacy();
     let history = [], busy = false;
@@ -4418,10 +4415,6 @@ APPS.ai = {
       if (busy) return;
       const text = input.value.trim();
       if (!text) return;
-      if (!settings.aiCloud){
-        bubble('assistant', '<p>Cloud AI is switched off, so nothing was sent. Turn it back on with the switch above the message box.</p>');
-        return;
-      }
       const lim = aiCheckLimit();
       if (!lim.ok){
         bubble('assistant', '<p style="color:#e81123">⏳ ' + lim.msg + '</p>');
