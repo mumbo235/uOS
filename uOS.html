@@ -240,6 +240,19 @@ body.touch button,body.touch .pin,body.touch .traybtn,body.touch .dicon{-webkit-
 .pal-row .ps{color:var(--text-dim);font-size:11px;white-space:nowrap}
 .pal-hint{padding:9px 14px;border-top:1px solid var(--border);color:var(--text-dim);font-size:11px;display:flex;gap:12px}
 .pal-empty{padding:16px;color:var(--text-dim);font-size:12.5px}
+/* ---- profiles ---- */
+#profiles{position:fixed;inset:0;z-index:965;display:none;align-items:center;justify-content:center;padding:20px;background:rgba(6,9,14,.62)}
+#profiles.open{display:flex}
+.prof-box{width:100%;max-width:640px;background:var(--surface);backdrop-filter:blur(34px) saturate(160%);-webkit-backdrop-filter:blur(34px) saturate(160%);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);padding:20px;display:flex;flex-direction:column;gap:16px}
+.prof-box h2{margin:0;font-size:18px;text-align:center}
+.prof-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:12px}
+.prof-tile{display:flex;flex-direction:column;align-items:center;gap:8px;padding:16px 8px;border-radius:12px;background:var(--field);border:1px solid transparent;transition:transform .12s,background .12s,border-color .12s}
+.prof-tile:hover{transform:translateY(-2px);background:var(--field-hover);border-color:var(--accent)}
+.prof-tile.on{border-color:var(--accent);background:var(--accent-soft)}
+.prof-tile .ava{font-size:34px;line-height:1;width:56px;height:56px;display:grid;place-items:center;border-radius:50%;background:var(--surface-2)}
+.prof-tile .nm{font-size:12.5px;font-weight:600;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.prof-tile .badge{font-size:10px;color:var(--accent)}
+.prof-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;border-top:1px solid var(--border);padding-top:12px}
 .qa{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .qa button{background:var(--field);border:1px solid var(--border);border-radius:6px;padding:11px 8px;display:flex;flex-direction:column;align-items:center;gap:7px;font-size:11px;color:var(--text)}
 .qa button:hover{background:var(--field-hover)}
@@ -865,6 +878,18 @@ body.cursor-lg,body.cursor-lg *{
   </div>
 </div>
 
+<!-- ================= PROFILES ================= -->
+<div id="profiles">
+  <div class="prof-box">
+    <h2 id="profTitle">Who's using uOS?</h2>
+    <div class="prof-grid" id="profList"></div>
+    <div class="prof-foot">
+      <span class="muted" style="font-size:11.5px">Each profile keeps its own files, settings, desktop and games.</span>
+      <button class="btn" id="profClose">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <script>
 /* =====================================================================
    uOS — a web operating system in one HTML file
@@ -1005,7 +1030,7 @@ migrateProfiles();
    One source of truth: publish.sh reads this constant, so tagging and the
    zip name always follow the build. Bump this when you ship.
    ===================================================================== */
-const UOS_VERSION = '3.1';
+const UOS_VERSION = '3.2';
 const UOS_REPO = 'mumbo235/uOS';
 const UOS_RELEASES = 'https://github.com/' + UOS_REPO + '/releases';
 
@@ -2574,6 +2599,49 @@ APPS.settings = {
           note('Compact squeezes padding so more fits on screen.')
         )
       ],
+
+      Users: () => {
+        const p = currentProfile();
+        const nameIn = el('input', { class: 'field', value: p.name });
+        nameIn.style.maxWidth = '200px';
+        nameIn.oninput = () => {
+          const t = nameIn.value.trim() || 'User';
+          settings.user = t; saveSettings();
+          const list = profilesGet(); const hit = list.find(x => x.id === p.id);
+          if (hit){ hit.name = t; profilesSet(list); }
+        };
+        const avIn = el('input', { class: 'field', value: p.avatar || '', placeholder: '🙂' });
+        avIn.style.maxWidth = '90px';
+        avIn.oninput = () => {
+          const t = Array.from(avIn.value.trim()).slice(0, 2).join('') || '🧑';
+          settings.avatar = t; saveSettings();
+          const list = profilesGet(); const hit = list.find(x => x.id === p.id);
+          if (hit){ hit.avatar = t; profilesSet(list); }
+        };
+        return [
+          head('This profile'),
+          card(
+            row('Name', nameIn, 'Shown on the Start menu and lock screen'),
+            row('Picture', avIn, 'Any emoji, or blank for your initial'),
+            note('Files, settings, desktop, games and chips are kept separately for each profile.')
+          ),
+          head('Profiles on this browser'),
+          card(
+            row('Signed in as', el('b', {}, p.name + '  ' + (p.avatar || ''))),
+            row('Count', el('span', { class: 'muted' }, profilesGet().length + ' profile' + (profilesGet().length === 1 ? '' : 's'))),
+            row('Switch or add', btnRow(el('button', { class: 'btn primary', onclick: () => showProfiles() }, 'Open the profile picker')))
+          ),
+          head('Remove'),
+          card(
+            row('Delete this profile', btnRow(el('button', { class: 'btn danger', onclick: () => {
+              if (profilesGet().length < 2) return toast('Profiles', 'You need at least one profile');
+              if (!confirm('Delete "' + p.name + '"?\n\nIts files, settings and games are removed. This cannot be undone.')) return;
+              removeProfile(p.id);
+            } }, 'Delete…'))),
+            note('Deleting erases that profile\'s files, settings, games and chips.')
+          )
+        ];
+      },
 
       Storage: () => {
         const s = { total: storageBytes(), fs: JSON.stringify(FS).length * 2, files: Object.keys(FS).length, trash: TRASH.length, clip: CLIPBOARD.length, notif: notifications.length, icons: Object.keys(store.get('iconPos', {}) || {}).length };
@@ -8148,6 +8216,113 @@ function paletteKey(e){
 document.addEventListener('keydown', paletteKey, true);
 $('#palInput').addEventListener('input', e => renderPalette(e.target.value));
 $('#palette').addEventListener('click', e => { if (e.target && e.target.id === 'palette') closePalette(); });
+
+/* =====================================================================
+   PROFILES
+   The storage namespace (uos.<profile>.<key>) does the heavy lifting; this
+   is the switcher plus add / rename / delete. Changing profile reloads so
+   every app starts from that profile's data.
+   ===================================================================== */
+function profilesGet(){ try { return JSON.parse(localStorage.getItem(PROFILES_KEY)) || []; } catch(e){ return []; } }
+function profilesSet(list){ try { localStorage.setItem(PROFILES_KEY, JSON.stringify(list)); } catch(e){} }
+function currentProfile(){
+  const id = store.profileId();
+  return profilesGet().find(p => p.id === id) || { id: id, name: settings.user || 'Me', avatar: settings.avatar || '🧑' };
+}
+function switchProfile(id){
+  if (!id || id === store.profileId()) return;
+  try { saveSession(true); } catch(e){}
+  try { localStorage.setItem(ACTIVE_KEY, id); } catch(e){}
+  toast('Profiles', 'Switching…');
+  setTimeout(() => location.reload(), 120);
+}
+function addProfile(name, avatar){
+  const list = profilesGet();
+  const id = 'p' + Date.now().toString(36) + Math.floor(Math.random() * 900);
+  list.push({ id: id, name: name, avatar: avatar });
+  profilesSet(list);
+  /* seed that profile's settings so it greets them by name */
+  try {
+    const key = 'uos.' + id + '.settings';
+    const s = JSON.parse(localStorage.getItem(key) || '{}');
+    s.user = name; s.avatar = avatar;
+    localStorage.setItem(key, JSON.stringify(s));
+  } catch(e){}
+  return id;
+}
+function removeProfile(id){
+  const list = profilesGet().filter(p => p.id !== id);
+  if (!list.length) return false;                       // never delete the last one
+  profilesSet(list);
+  try { Object.keys(localStorage).filter(k => k.indexOf('uos.' + id + '.') === 0).forEach(k => localStorage.removeItem(k)); } catch(e){}
+  if (id === store.profileId()){ try { localStorage.setItem(ACTIVE_KEY, list[0].id); } catch(e){} setTimeout(() => location.reload(), 120); }
+  return true;
+}
+function profileMenu(p, e){
+  showContext(e.clientX, e.clientY, [
+    { label: p.id === store.profileId() ? '✓ Currently signed in' : 'Switch to this profile', act: () => switchProfile(p.id) },
+    { sep: true },
+    { label: 'Rename…', act: () => {
+        const n = prompt('Name for this profile:', p.name);
+        if (n === null) return;
+        const t = n.trim().slice(0, 24); if (!t) return;
+        const list = profilesGet();
+        const hit = list.find(x => x.id === p.id); if (!hit) return;
+        hit.name = t; profilesSet(list);
+        if (p.id === store.profileId()){ settings.user = t; saveSettings(); }
+        renderProfiles();
+      } },
+    { label: 'Change picture…', act: () => {
+        const v = prompt('An emoji for this profile:', p.avatar);
+        if (v === null) return;
+        const t = Array.from(v.trim()).slice(0, 2).join(''); if (!t) return;
+        const list = profilesGet();
+        const hit = list.find(x => x.id === p.id); if (!hit) return;
+        hit.avatar = t; profilesSet(list);
+        if (p.id === store.profileId()){ settings.avatar = t; saveSettings(); }
+        renderProfiles();
+      } },
+    { sep: true },
+    { label: 'Delete this profile', act: () => {
+        if (profilesGet().length < 2) return toast('Profiles', 'You need at least one profile');
+        if (!confirm('Delete "' + p.name + '"?\n\nIts files, settings and games are removed. This cannot be undone.')) return;
+        if (removeProfile(p.id)) toast('Profiles', 'Deleted ' + p.name);
+        renderProfiles();
+      } }
+  ]);
+}
+function renderProfiles(){
+  const host = $('#profList');
+  if (!host) return;
+  host.innerHTML = '';
+  profilesGet().forEach(p => {
+    const on = p.id === store.profileId();
+    const tile = el('button', { class: 'prof-tile' + (on ? ' on' : '') },
+      el('span', { class: 'ava' }, p.avatar || '🧑'),
+      el('span', { class: 'nm' }, p.name),
+      el('span', { class: 'badge' }, on ? 'signed in' : ''));
+    tile.onclick = () => { if (on) hideProfiles(); else switchProfile(p.id); };
+    tile.addEventListener('contextmenu', e => { e.preventDefault(); e.stopPropagation(); profileMenu(p, e); });
+    host.append(tile);
+  });
+  const add = el('button', { class: 'prof-tile' },
+    el('span', { class: 'ava' }, '＋'),
+    el('span', { class: 'nm' }, 'Add a profile'));
+  add.onclick = () => {
+    const n = prompt('Name for the new profile:', 'New user');
+    if (n === null) return;
+    const t = n.trim().slice(0, 24); if (!t) return;
+    const av = prompt('An emoji for them:', '🙂') || '🙂';
+    const id = addProfile(t, Array.from(av.trim()).slice(0, 2).join('') || '🙂');
+    switchProfile(id);
+  };
+  host.append(add);
+}
+function showProfiles(){ renderProfiles(); $('#profiles').classList.add('open'); }
+function hideProfiles(){ $('#profiles').classList.remove('open'); }
+$('.sm-user').onclick = () => { toggleStart(false); showProfiles(); };
+$('#profClose').onclick = hideProfiles;
+$('#profiles').addEventListener('click', e => { if (e.target && e.target.id === 'profiles') hideProfiles(); });
 
 /* global shortcuts */
 document.addEventListener('keydown', e => {

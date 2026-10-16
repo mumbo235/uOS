@@ -1,35 +1,44 @@
-# uOS 3.1
+# uOS 3.2
 
 **made by jarvo and deepseek**
 
 A desktop-style operating system that lives in a single HTML file. No build step, no
 dependencies, no installs, no accounts — just open it.
 
-## New in 3.1
+## New in 3.2
 
-- **Arcade** — **28 games, built in**. Arcade: Snake, Block Drop, Brick Breaker, Paddle
-  Duel, Invaders, Asteroids, Jumper, Dodger, Tower, Whack-a-mole, Reaction. Puzzle:
-  2048, Minesweeper, Memory, Simon, Match Three, Sliding Puzzle, Lights Out. Board:
-  Tic-tac-toe, Connect Four, Reversi. Word: Word Guess, Hangman. **Casino** — Slots,
-  Blackjack, Roulette, Video Poker, Higher or Lower, played for **virtual chips only**
-  (play money: nothing to buy, deposit or cash out). Browsable menu with categories,
-  search, best scores and play counts — all saved locally.
-- **HTML Viewer** — open, edit and run HTML locally: source on the left, live sandboxed
-  preview on the right, with **⛶ Fullscreen** (Ctrl+Shift+F, Esc to exit). Opens any
-  local `.html` file at any size, saves back to uOS, downloads, or opens in a real tab.
-- **My Apps** — your own shelf of single-file HTML apps. Small ones live in the uOS file
-  system; anything **up to 64 MB** goes to an IndexedDB vault, so big pages work too.
-- **Tray menus** — click the network, volume or battery icon: live Wi-Fi info with a
-  connection test, a volume mixer with **per-app** levels, and battery info with
-  **Battery saver / Balanced / Performance** modes.
-- **Zoom & scale** — scale the whole interface 60–160% (Ctrl+Alt+= / − / 0), plus taskbar
-  height; everything is scale-aware so windows, icons and menus stay put.
-- **More personalisation** — window corners, interface font, transparency, acrylic,
-  wallpaper fit and dimming, profile avatar.
-- **Updates** — uOS now checks its GitHub releases and tells you when a newer version is
-  out (Settings → *About & backup* → Updates).
-- Terminal and AI Assistant are pinned to the taskbar by default; the taskbar tray got a
-  cleaner look; the centred taskbar now stays at the bottom.
+- **Session restore + window memory** — reopen uOS and your apps come back, each where
+  and how big you left it (maximised state included). Toggle in Settings → Windows.
+- **Command palette** — **Ctrl+K** searches apps, files, settings sections and commands.
+  Type, arrow, Enter. Everything is one keystroke away.
+- **Virtual desktops** — four desktops with a pager in the taskbar. Ctrl+Alt+1–4 or
+  Ctrl+Alt+arrows switch; add Shift to send the active window across.
+- **Snap layouts** — drag a window to the top edge and pick a zone (halves, thirds,
+  quarters, main+side). Hover to preview, release to snap.
+- **User profiles** — separate files, settings, desktop, games and chips per person.
+  Switch from the Start menu or Settings → Users; nothing is shared.
+- **Open with… / default apps** — Files can open a file in any compatible app, and you
+  can change which app owns each extension.
+- **Notification actions** — toasts and the Action Center now carry buttons (the update
+  notice can take you straight to the release).
+- **Storage safety net** — a quota warning instead of a silent failed save, a storage
+  breakdown in Settings, and one-click export of everything as JSON.
+- **Touch mode** — bigger taskbar, buttons, icons and resize handles; enabled
+  automatically on touch devices, toggle in Settings → Display.
+- **AI privacy notice** — the Assistant states which service your prompts go to, and has
+  a switch to stop sending anything at all.
+
+## Also in 3.2
+
+- **Arcade** — **28 games, built in**, including a play-money casino (Slots, Blackjack,
+  Roulette, Video Poker, Higher or Lower) played for virtual chips only: nothing to buy,
+  deposit or cash out.
+- **HTML Viewer** (open, edit and run HTML locally with a sandboxed preview and
+  fullscreen) and **My Apps** (your own shelf of single-file HTML apps, up to 64 MB).
+- Tray menus with live Wi-Fi info, a volume mixer with per-app levels, and battery
+  information with Battery saver / Balanced / Performance modes.
+- Zoom & scale, more personalisation (corners, font, transparency, wallpaper fit and
+  dimming), and an update checker that reads this repository's releases.
 
 ## Highlights
 
