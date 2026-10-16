@@ -4209,9 +4209,12 @@ let AI_BASE = store.get('aiBase', AI_DEFAULT_BASE) || AI_DEFAULT_BASE;
 
 /* --------------------------- usage rate limits ---------------------- *
  * Client-side guard so one person can't burn the whole free quota.
- * Stored per browser — it stops casual overuse, not a determined user.  */
-const AI_LIMITS_DEFAULT = { perMin: 20, perDay: 100 };
-let AI_LIMITS = Object.assign({}, AI_LIMITS_DEFAULT, store.get('aiLimits', {}) || {});
+ * These are fixed: they are deliberately not configurable from the UI (a
+ * stored override from an older build is discarded below), and per browser
+ * they stop casual overuse rather than a determined user.               */
+const AI_LIMITS = Object.freeze({ perMin: 20, perDay: 100 });
+const AI_LIMITS_DEFAULT = AI_LIMITS;
+try { if (localStorage.getItem(store.key('aiLimits'))) localStorage.removeItem(store.key('aiLimits')); } catch(e){}
 function aiUsage(){
   const now = Date.now();
   let u = store.get('aiUsage', { t: [] });
@@ -4372,30 +4375,15 @@ APPS.ai = {
         }
       };
       card.append(el('div', { style: 'display:flex;gap:12px;flex-wrap:wrap;align-items:center' }, testBtn, testMsg));
-      // ---- usage limits ----
+      // ---- usage limits (fixed, not user-editable) ----
       const limWrap = el('div', { class: 'card', style: 'background:var(--field);gap:8px' });
-      limWrap.append(el('b', { style: 'font-size:12.5px' }, 'Usage limits (this browser)'));
-      const minInp = el('input', { class: 'field', type: 'number', min: '1', max: '600', style: 'max-width:110px' });
-      minInp.value = AI_LIMITS.perMin;
-      const dayInp = el('input', { class: 'field', type: 'number', min: '1', max: '100000', style: 'max-width:120px' });
-      dayInp.value = AI_LIMITS.perDay;
+      limWrap.append(el('b', { style: 'font-size:12.5px' }, 'Usage limits'));
       const usageTxt = el('span', { class: 'muted', style: 'font-size:12px' },
         'Used ' + aiUsage().t.length + ' today · ' + aiRemaining() + ' left');
-      const applyLim = el('button', { class: 'btn' }, 'Apply');
-      applyLim.onclick = () => {
-        AI_LIMITS.perMin = Math.max(1, +minInp.value || AI_LIMITS_DEFAULT.perMin);
-        AI_LIMITS.perDay = Math.max(1, +dayInp.value || AI_LIMITS_DEFAULT.perDay);
-        store.set('aiLimits', { perMin: AI_LIMITS.perMin, perDay: AI_LIMITS.perDay });
-        usageTxt.textContent = 'Used ' + aiUsage().t.length + ' today · ' + aiRemaining() + ' left';
-        toast('AI Assistant', 'Limits saved');
-      };
-      const resetUse = el('button', { class: 'btn' }, 'Reset counter');
-      resetUse.onclick = () => { store.set('aiUsage', { t: [] }); usageTxt.textContent = 'Used 0 today · ' + aiRemaining() + ' left'; };
       limWrap.append(
-        el('div', { style: 'display:flex;gap:10px;flex-wrap:wrap;align-items:center' },
-          el('span', { class: 'muted', style: 'font-size:12px' }, 'Max per minute'), minInp,
-          el('span', { class: 'muted', style: 'font-size:12px' }, 'per day'), dayInp, applyLim),
-        el('div', { style: 'display:flex;gap:10px;flex-wrap:wrap;align-items:center' }, usageTxt, resetUse));
+        el('div', { class: 'muted', style: 'font-size:12px' },
+          'Fixed at ' + AI_LIMITS.perMin + ' messages per minute and ' + AI_LIMITS.perDay + ' per day, per browser.'),
+        el('div', { style: 'display:flex;gap:10px;flex-wrap:wrap;align-items:center' }, usageTxt));
       card.append(limWrap);
       if (AI_KEY) card.append(el('button', { class: 'btn danger', style: 'align-self:flex-start',
         onclick: () => { AI_KEY = ''; try { localStorage.removeItem('uos.aiKey'); localStorage.removeItem('uos.aiBase'); } catch(e){} showSetup('Saved key removed.'); } }, 'Forget saved key'));
