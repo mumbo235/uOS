@@ -238,6 +238,27 @@ body.touch button,body.touch .pin,body.touch .traybtn,body.touch .dicon{-webkit-
 .cs-sw{flex:1;min-width:54px;height:52px;border-radius:8px;position:relative;overflow:hidden;border:1px solid var(--border)}
 .cs-sw .cs-code{position:absolute;left:0;right:0;bottom:3px;font-size:9.5px;font-family:var(--mono);color:rgba(255,255,255,.92);text-shadow:0 1px 3px rgba(0,0,0,.75)}
 .cs-sw:hover{outline:2px solid var(--accent)}
+/* ---- Sheets ---- */
+.sheet-wrap{flex:1;min-height:0;overflow:auto;padding-bottom:12px;outline:none}
+table.sheet{border-collapse:separate;border-spacing:0;font-size:12px}
+table.sheet th,table.sheet td{border-right:1px solid var(--border);border-bottom:1px solid var(--border);padding:4px 7px;min-width:88px;max-width:88px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+table.sheet th{background:var(--surface-2);color:var(--text-dim);font-size:11px;font-weight:600;text-align:center;position:sticky;top:0;z-index:2}
+table.sheet th.rowhead{left:0;z-index:3;min-width:40px;max-width:40px}
+table.sheet td{background:var(--surface);color:var(--text)}
+table.sheet td.num{text-align:right}
+table.sheet td.sel{outline:2px solid var(--accent);outline-offset:-2px;background:var(--accent-soft)}
+/* ---- Typing Test ---- */
+.type-target{background:var(--surface-2);border:1px solid var(--border);border-radius:11px;padding:16px;font-size:19px;line-height:1.8;flex:1;overflow:auto;min-height:120px}
+.type-target .tw{color:var(--text-dim)}
+.type-target .tw.ok{color:var(--text)}
+.type-target .tw.bad{color:#e81123;text-decoration:underline wavy rgba(232,17,35,.55)}
+.type-target .tw.now{background:var(--accent-soft);border-radius:5px}
+/* ---- Flashcards ---- */
+.fc-card{background:var(--surface-2);border:1px solid var(--border);border-radius:14px;min-height:200px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:24px;text-align:center;cursor:default;transition:transform .14s,background .14s}
+.fc-card:hover{transform:translateY(-2px);background:var(--field-hover)}
+.fc-card.flipped{background:var(--accent-soft)}
+.fc-card .fc-side{font-size:20px;line-height:1.45}
+.fc-card .fc-tag{font-size:11px;color:var(--text-dim)}
 #palList{max-height:52vh;overflow:auto;padding:6px}
 .pal-row{display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:9px;font-size:13px;cursor:default}
 .pal-row.on{background:var(--accent-soft);outline:1px solid var(--accent)}
@@ -1181,7 +1202,9 @@ function notify(title, msg = '', actions){
     } }, a.label)));
     box.append(row);
   }
-  $('#toasts').append(box);
+  const host = $('#toasts');
+  if (!host) return;                                     // nothing to draw into
+  host.append(box);
   setTimeout(() => {
     box.style.opacity = '0'; box.style.transition = 'opacity .3s';
     setTimeout(() => { box.remove(); __liveToasts.delete(key); }, 320);
@@ -7496,6 +7519,431 @@ APPS.colorstudio = {
     $('#csRandom', body).onclick = () => { base = hslHex(Math.random() * 360, 0.55 + Math.random() * 0.3, 0.45 + Math.random() * 0.2); render(); };
     $('#csCopy', body).onclick = async () => toast('Colour Studio', await copyText(base) ? 'Copied ' + base : base);
     render();
+  }
+};
+
+/* -------------------------------- Sheets ----------------------------- */
+const SHEET_COLS = ['A','B','C','D','E','F','G','H','I','J','K','L'];
+const SHEET_ROWS = 30;
+APPS.sheets = {
+  name: 'Sheets', icon: '📊', w: 900, h: 620,
+  mount(body, win){
+    body.innerHTML = `
+      <div class="toolbar">
+        <span class="mono" id="shRef" style="font-size:12px;min-width:38px;color:var(--accent)">A1</span>
+        <input class="field mono" id="shFormula" placeholder="value, text, or =SUM(A1:A5)" style="flex:1;min-width:150px" spellcheck="false">
+        <button class="btn" id="shClear">Clear cell</button>
+        <div class="sep"></div>
+        <button class="btn" id="shCsv">Export CSV</button>
+        <button class="btn" id="shToFiles">Save to Files</button>
+        <button class="btn danger" id="shWipe">Clear all</button>
+        <span class="muted" id="shInfo" style="font-size:11.5px;margin-left:auto"></span>
+      </div>
+      <div class="sheet-wrap" id="shWrap"></div>`;
+    const wrap = $('#shWrap', body), refEl = $('#shRef', body), formula = $('#shFormula', body), info = $('#shInfo', body);
+    let data = store.get('sheet', {}) || {};
+    let sel = 'A1';
+    const refOf = (c, r) => SHEET_COLS[c] + (r + 1);
+
+    /* ---- a small formula engine: refs, arithmetic and the usual aggregates */
+    function raw(ref2){ return data[ref2] == null ? '' : String(data[ref2]); }
+    function rangeVals(arg){
+      const m = arg.trim().match(/^([A-Z]{1,2}\d{1,3})\s*:\s*([A-Z]{1,2}\d{1,3})$/i);
+      if (!m) return [];
+      const parse = r => ({ c: SHEET_COLS.indexOf(r.replace(/\d+/g, '').toUpperCase()), r: parseInt(r.replace(/\D/g, ''), 10) - 1 });
+      const a = parse(m[1]), b = parse(m[2]);
+      const out = [];
+      for (let r = Math.min(a.r, b.r); r <= Math.max(a.r, b.r); r++)
+        for (let c = Math.min(a.c, b.c); c <= Math.max(a.c, b.c); c++){
+          const v = value(refOf(c, r), 1);
+          const n = parseFloat(v);
+          if (isFinite(n)) out.push(n);
+        }
+      return out;
+    }
+    function evalFormula(expr, depth){
+      let e = expr;
+      e = e.replace(/\b(SUM|AVERAGE|AVG|MIN|MAX|COUNT)\(([^()]*)\)/gi, (m, fn, arg) => {
+        const vals = rangeVals(arg);
+        const f = fn.toUpperCase();
+        if (f === 'SUM') return '(' + vals.reduce((a, b) => a + b, 0) + ')';
+        if (f === 'AVERAGE' || f === 'AVG') return '(' + (vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0) + ')';
+        if (f === 'MIN') return '(' + (vals.length ? Math.min.apply(null, vals) : 0) + ')';
+        if (f === 'MAX') return '(' + (vals.length ? Math.max.apply(null, vals) : 0) + ')';
+        return '(' + vals.length + ')';
+      });
+      e = e.replace(/\b([A-Z]{1,2}\d{1,3})\b/gi, m => {
+        const n = parseFloat(value(m.toUpperCase(), depth + 1));
+        return isFinite(n) ? String(n) : '0';
+      });
+      if (!/^[-+*/(). 0-9eE]+$/.test(e)) throw new Error('unsupported');
+      const out = Function('"use strict";return (' + e + ')')();
+      if (typeof out !== 'number' || !isFinite(out)) throw new Error('bad result');
+      return Math.round(out * 1e10) / 1e10;
+    }
+    function value(ref2, depth){
+      depth = depth || 0;
+      if (depth > 12) return '#circular';
+      const v = raw(ref2).trim();
+      if (!v) return '';
+      if (v[0] !== '=') return v;
+      try { return String(evalFormula(v.slice(1), depth)); }
+      catch(e){ return '#error'; }
+    }
+
+    /* ---- the grid ---- */
+    const table = el('table', { class: 'sheet' });
+    const thead = el('thead'), hr = el('tr');
+    hr.append(el('th', { class: 'rowhead' }, ''));
+    SHEET_COLS.forEach(c => hr.append(el('th', {}, c)));
+    thead.append(hr); table.append(thead);
+    const tbody = el('tbody');
+    const cellEls = {};
+    for (let r = 0; r < SHEET_ROWS; r++){
+      const tr = el('tr');
+      tr.append(el('th', { class: 'rowhead' }, String(r + 1)));
+      for (let c = 0; c < SHEET_COLS.length; c++){
+        const ref2 = refOf(c, r);
+        const td = el('td', { 'data-ref': ref2, tabindex: '-1' });
+        td.onclick = () => select(ref2);
+        td.ondblclick = () => { select(ref2); formula.focus(); formula.select(); };
+        cellEls[ref2] = td;
+        tr.append(td);
+      }
+      tbody.append(tr);
+    }
+    table.append(tbody);
+    wrap.append(table);
+
+    function paintCell(ref2){
+      const td = cellEls[ref2];
+      if (!td) return;
+      const v = value(ref2);
+      td.textContent = v;
+      td.classList.toggle('num', v !== '' && /^-?[\d.,]+$/.test(v));
+    }
+    function paintAll(){ Object.keys(cellEls).forEach(paintCell); }
+    function select(ref2){
+      sel = ref2;
+      $$('td.sel', table).forEach(t => t.classList.remove('sel'));
+      const td = cellEls[ref2];
+      if (td) td.classList.add('sel');
+      refEl.textContent = ref2;
+      formula.value = raw(ref2);
+      info.textContent = Object.keys(data).filter(k => data[k] !== '').length + ' filled cells';
+    }
+    function commit(move){
+      const v = formula.value;
+      if (v === '') delete data[sel]; else data[sel] = v;
+      store.set('sheet', data);
+      paintAll();
+      if (move) moveSel(move[0], move[1]);
+      else select(sel);
+    }
+    function moveSel(dx, dy){
+      const c = SHEET_COLS.indexOf(sel.replace(/\d+/g, ''));
+      const r = parseInt(sel.replace(/\D/g, ''), 10) - 1;
+      const nc = Math.max(0, Math.min(SHEET_COLS.length - 1, c + dx));
+      const nr = Math.max(0, Math.min(SHEET_ROWS - 1, r + dy));
+      select(refOf(nc, nr));
+      const td = cellEls[sel];
+      if (td && td.scrollIntoView) td.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    }
+    formula.addEventListener('keydown', e => {
+      if (e.key === 'Enter'){ e.preventDefault(); commit([0, 1]); }
+      else if (e.key === 'Escape'){ e.preventDefault(); select(sel); formula.blur(); }
+      else if (e.key === 'Tab'){ e.preventDefault(); commit([1, 0]); formula.focus(); }
+    });
+    table.addEventListener('keydown', e => {
+      const arrows = { ArrowUp: [0,-1], ArrowDown: [0,1], ArrowLeft: [-1,0], ArrowRight: [1,0] };
+      if (arrows[e.key]){ e.preventDefault(); moveSel(arrows[e.key][0], arrows[e.key][1]); return; }
+      if (e.key === 'Enter'){ e.preventDefault(); formula.focus(); formula.select(); return; }
+      if (e.key === 'Delete' || e.key === 'Backspace'){ e.preventDefault(); delete data[sel]; store.set('sheet', data); paintAll(); select(sel); return; }
+      if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey){
+        e.preventDefault(); formula.focus(); formula.value = e.key; formula.select();
+      }
+    });
+    wrap.tabIndex = 0;
+    $('#shClear', body).onclick = () => { delete data[sel]; store.set('sheet', data); paintAll(); select(sel); };
+    $('#shWipe', body).onclick = () => {
+      if (!confirm('Clear every cell in this sheet?')) return;
+      data = {}; store.set('sheet', data); paintAll(); select(sel);
+      toast('Sheets', 'Sheet cleared');
+    };
+    function csvText(){
+      const rows = [];
+      for (let r = 0; r < SHEET_ROWS; r++){
+        const line = [];
+        for (let c = 0; c < SHEET_COLS.length; c++){
+          const v = value(refOf(c, r));
+          line.push(/[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v);
+        }
+        if (line.some(Boolean)) rows.push(line.join(','));
+      }
+      return rows.join('\n');
+    }
+    $('#shCsv', body).onclick = () => {
+      const a = el('a', { href: URL.createObjectURL(new Blob([csvText()], { type: 'text/csv' })), download: 'sheet.csv' });
+      document.body.append(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+      toast('Sheets', 'Exported sheet.csv');
+    };
+    $('#shToFiles', body).onclick = () => {
+      const p = prompt('Save this sheet into uOS Files as:', 'Documents/sheet.csv');
+      if (!p) return;
+      fsWrite(p.replace(/^\/+/, ''), csvText());
+      toast('Sheets', 'Saved ' + p);
+    };
+    paintAll();
+    select('A1');
+    setTimeout(() => { try { table.focus(); } catch(e){} }, 30);
+  }
+};
+
+/* ----------------------------- Typing Test --------------------------- */
+APPS.typing = {
+  name: 'Typing Test', icon: '⌨️', w: 860, h: 560,
+  mount(body, win){
+    const WORDS = ('the of and to in a is that it for on with as was at by be this from or have an they which one you were her all she there would their we him been has when who will more no if out so what up into them can only other new some could time these two may then do first any my now such like our over man me even most made after also did many before must through back years where much your way well down should because each just those people mr how too little state good very make world still own see men work long get here between both life being under never day same another know while last might us great old year off come since against go came right used take three states himself few house use during without again place around however home small found thought went say part once general high upon school every don thing course hard might watch').split(' ');
+    const WORDS_PER_TEST = 30;
+    body.innerHTML = `
+      <div class="toolbar">
+        <button class="btn primary" id="tyStart">Start a run</button>
+        <button class="btn" id="tyAgain">New words</button>
+        <div class="sep"></div>
+        <span class="muted" style="font-size:12px">WPM <b id="tyWpm">—</b> · accuracy <b id="tyAcc">—</b> · <b id="tyLeft">60</b>s</span>
+        <span class="muted" style="font-size:11.5px;margin-left:auto" id="tyHint">Press Start, then type the words below</span>
+      </div>
+      <div class="pad" style="flex:1;min-height:0;gap:12px">
+        <div class="type-target" id="tyText"></div>
+        <textarea class="mono-area" id="tyIn" spellcheck="false" placeholder="Your typing appears here…" style="height:96px;flex:0 0 auto;resize:none"></textarea>
+      </div>`;
+    const target = $('#tyText', body), input = $('#tyIn', body), wpmEl = $('#tyWpm', body), accEl = $('#tyAcc', body), leftEl = $('#tyLeft', body), hint = $('#tyHint', body);
+    let words = [], started = 0, timer = null, running = false, typed = '';
+
+    function newWords(){
+      const pick = [];
+      while (pick.length < WORDS_PER_TEST) pick.push(WORDS[Math.floor(Math.random() * WORDS.length)]);
+      words = pick;
+      typed = '';
+      input.value = '';
+      input.disabled = true;
+      paint();
+      resetStats();
+    }
+    function resetStats(){
+      wpmEl.textContent = '—'; accEl.textContent = '—'; leftEl.textContent = '60';
+    }
+    function paint(){
+      const typedWords = typed.length ? typed.split(' ') : [];
+      target.innerHTML = '';
+      words.forEach((w, i) => {
+        const isCurrent = i === typedWords.length - 1;
+        const t = typedWords[i];
+        let cls = '';
+        if (t != null){ cls = t === w ? ' ok' : ' bad'; }
+        else if (i < typedWords.length) cls = ' bad';
+        if (isCurrent && t != null && t !== w) cls = ' bad';
+        target.append(el('span', { class: 'tw' + cls + (isCurrent ? ' now' : '') }, w + ' '));
+      });
+    }
+    function stats(){
+      const mins = Math.max(1 / 60, (Date.now() - started) / 60000);
+      const typedWords = typed.trim() ? typed.trim().split(/\s+/) : [];
+      let good = 0;
+      typedWords.forEach((t, i) => { if (t === words[i]) good++; });
+      const chars = typed.length;
+      const wpm = Math.round((good / mins));
+      const acc = chars ? Math.round((good / Math.max(1, typedWords.length)) * 100) : 100;
+      wpmEl.textContent = String(wpm);
+      accEl.textContent = acc + '%';
+      return { wpm: wpm, acc: acc, good: good };
+    }
+    function finish(gave){
+      if (!running) return;
+      running = false;
+      clearInterval(timer);
+      input.disabled = true;
+      const s = stats();
+      hint.textContent = 'Finished — press Start for another run';
+      toast('Typing Test', 'Done — ' + s.wpm + ' wpm at ' + s.acc + '% accuracy' + (gave ? ' (30s sample)' : ''));
+    }
+    function start(){
+      words = words.length ? words : [];
+      started = Date.now();
+      running = true;
+      input.disabled = false;
+      input.focus();
+      hint.textContent = 'Go!';
+      let left = 60;
+      leftEl.textContent = '60';
+      clearInterval(timer);
+      timer = setInterval(() => {
+        if (!running) return;
+        left--;
+        leftEl.textContent = String(Math.max(0, left));
+        stats();
+        if (left <= 0) finish(true);
+      }, 1000);
+    }
+    input.addEventListener('input', () => {
+      if (!running) return;
+      typed = input.value;
+      paint();
+      stats();
+      const typedWords = typed.trim().split(/\s+/);
+      if (typedWords.length >= words.length && typed.trim()) finish(false);
+    });
+    $('#tyStart', body).onclick = () => { if (!words.length) newWords(); start(); };
+    $('#tyAgain', body).onclick = () => { newWords(); toast('Typing Test', 'Fresh words — press Start'); };
+    newWords();
+    return () => clearInterval(timer);
+  }
+};
+
+/* ------------------------------ Flashcards --------------------------- */
+APPS.flashcards = {
+  name: 'Flashcards', icon: '🗂️', w: 760, h: 600,
+  mount(body, win){
+    let decks = store.get('decks', null) || [{ id: 'demo', name: 'Sample deck', cards: [
+      { f: 'What does CSS stand for?', b: 'Cascading Style Sheets' },
+      { f: '2 × 12', b: '24' },
+      { f: 'Capital of Japan', b: 'Tokyo' }
+    ] }];
+    let deckId = store.get('deckActive', decks[0] && decks[0].id) || (decks[0] && decks[0].id);
+    let mode = 'list';           // list | study | edit
+    let queue = [], qi = 0, flipped = false, right = 0, wrong = 0;
+    const save = () => { store.set('decks', decks); store.set('deckActive', deckId); };
+    const deck = () => decks.find(d => d.id === deckId) || decks[0];
+
+    body.innerHTML = `
+      <div class="toolbar">
+        <select class="field" id="fcDeck" style="max-width:200px;padding:6px 9px"></select>
+        <button class="btn primary" id="fcStudy">Study</button>
+        <button class="btn" id="fcEdit">Edit</button>
+        <button class="btn" id="fcNew">New deck</button>
+        <button class="btn danger" id="fcDel">Delete deck</button>
+        <span class="muted" id="fcInfo" style="font-size:11.5px;margin-left:auto"></span>
+      </div>
+      <div class="pad" style="flex:1;min-height:0;overflow:auto" id="fcHost"></div>`;
+    const host = $('#fcHost', body), deckSel = $('#fcDeck', body), info = $('#fcInfo', body);
+
+    function deckOptions(){
+      deckSel.innerHTML = '';
+      decks.forEach(d => deckSel.append(el('option', { value: d.id }, d.name + ' (' + d.cards.length + ')')));
+      if (!deck()) deckId = decks[0] && decks[0].id;
+      deckSel.value = deckId;
+    }
+    function showList(){
+      mode = 'list';
+      host.innerHTML = '';
+      const d = deck();
+      if (!d) return host.append(el('div', { class: 'muted' }, 'No decks yet'));
+      const card = el('div', { class: 'card' },
+        el('b', {}, d.name),
+        el('div', { class: 'muted', style: 'font-size:12px' }, d.cards.length + ' card' + (d.cards.length === 1 ? '' : 's')),
+        el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;margin-top:6px' },
+          el('button', { class: 'btn primary', onclick: beginStudy }, 'Study this deck'),
+          el('button', { class: 'btn', onclick: showEdit }, 'Edit cards'),
+          el('button', { class: 'btn', onclick: () => {
+            const n = prompt('Rename this deck:', d.name);
+            if (n === null) return;
+            const t = n.trim().slice(0, 40); if (!t) return;
+            d.name = t; save(); deckOptions(); showList();
+          } }, 'Rename')));
+      host.append(card);
+      const list = el('div', { class: 'card' });
+      d.cards.slice(0, 40).forEach(c => list.append(el('div', { class: 'kv' },
+        el('span', { style: 'min-width:0;overflow:hidden;text-overflow:ellipsis' }, c.f),
+        el('span', { class: 'muted', style: 'text-align:right' }, c.b))));
+      if (d.cards.length > 40) list.append(el('div', { class: 'muted', style: 'font-size:11.5px' }, '…and ' + (d.cards.length - 40) + ' more'));
+      host.append(list);
+      info.textContent = 'Best score ' + (store.get('deckBest', {})[d.id] || 0) + ' correct in a row';
+    }
+    function showEdit(){
+      mode = 'edit';
+      host.innerHTML = '';
+      const d = deck();
+      const front = el('input', { class: 'field', placeholder: 'Front (question)' });
+      const back = el('input', { class: 'field', placeholder: 'Back (answer)' });
+      const add = () => {
+        if (!front.value.trim() || !back.value.trim()) return toast('Flashcards', 'Fill in both sides');
+        d.cards.push({ f: front.value.trim(), b: back.value.trim() });
+        front.value = ''; back.value = ''; save(); deckOptions(); showEdit();
+      };
+      front.addEventListener('keydown', e => { if (e.key === 'Enter') back.focus(); });
+      back.addEventListener('keydown', e => { if (e.key === 'Enter') add(); });
+      host.append(el('div', { class: 'card' },
+        el('b', {}, 'Add a card'),
+        el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap' }, front, el('span', { class: 'muted' }, '→'), back,
+          el('button', { class: 'btn primary', onclick: add }, 'Add')),
+        el('div', { class: 'muted', style: 'font-size:11.5px' }, 'Enter in the answer box adds the card.')));
+      const list = el('div', { class: 'card' });
+      d.cards.forEach((c, i) => list.append(el('div', { class: 'kv' },
+        el('span', { style: 'min-width:0;overflow:hidden;text-overflow:ellipsis' }, (i + 1) + '. ' + c.f),
+        el('span', { class: 'muted', style: 'text-align:right;display:flex;gap:8px;align-items:center' },
+          c.b,
+          el('button', { class: 'btn', onclick: () => { d.cards.splice(i, 1); save(); deckOptions(); showEdit(); } }, '✕')))));
+      host.append(list);
+      info.textContent = 'Editing ' + d.cards.length + ' cards';
+    }
+    function beginStudy(){
+      const d = deck();
+      if (!d || !d.cards.length) return toast('Flashcards', 'Add some cards first');
+      queue = d.cards.slice().sort(() => Math.random() - 0.5);
+      qi = 0; flipped = false; right = 0; wrong = 0;
+      showCard();
+    }
+    function showCard(){
+      const d = deck();
+      if (mode !== 'study'){ mode = 'study'; }
+      host.innerHTML = '';
+      if (qi >= queue.length){
+        const bestMap = store.get('deckBest', {}) || {};
+        const prev = bestMap[d.id] || 0;
+        const best = Math.max(prev, right);
+        bestMap[d.id] = best; store.set('deckBest', bestMap);
+        host.append(el('div', { class: 'card', style: 'align-items:center;text-align:center;gap:10px' },
+          el('b', { style: 'font-size:17px' }, 'Deck finished'),
+          el('div', { class: 'muted' }, right + ' correct · ' + wrong + ' missed · ' + Math.round((right / Math.max(1, queue.length)) * 100) + '%'),
+          el('div', { class: 'muted', style: 'font-size:12px' }, best > prev ? 'New best!' : 'Best so far: ' + best),
+          el('div', { style: 'display:flex;gap:8px' },
+            el('button', { class: 'btn primary', onclick: beginStudy }, 'Study again'),
+            el('button', { class: 'btn', onclick: showList }, 'Back to decks'))));
+        info.textContent = 'Finished';
+        return;
+      }
+      const c = queue[qi];
+      const card = el('div', { class: 'fc-card' + (flipped ? ' flipped' : ''), onclick: () => { flipped = !flipped; showCard(); } },
+        el('div', { class: 'fc-side' }, flipped ? c.b : c.f),
+        el('div', { class: 'fc-tag' }, flipped ? 'answer — click to flip back' : 'question — click to reveal'));
+      host.append(card);
+      host.append(el('div', { style: 'display:flex;gap:8px;justify-content:center;flex-wrap:wrap' },
+        el('button', { class: 'btn', onclick: () => { wrong++; qi++; flipped = false; showCard(); } }, '✗ Missed it'),
+        el('button', { class: 'btn primary', onclick: () => { right++; qi++; flipped = false; showCard(); } }, '✓ Got it'),
+        el('button', { class: 'btn', onclick: showList }, 'Stop')));
+      info.textContent = 'Card ' + (qi + 1) + ' of ' + queue.length + ' · ' + right + ' correct';
+    }
+    deckSel.onchange = () => { deckId = deckSel.value; save(); showList(); };
+    $('#fcStudy', body).onclick = beginStudy;
+    $('#fcEdit', body).onclick = showEdit;
+    $('#fcNew', body).onclick = () => {
+      const n = prompt('Name for the new deck:', 'New deck');
+      if (n === null) return;
+      const t = n.trim().slice(0, 40); if (!t) return;
+      const id = 'd' + Date.now().toString(36);
+      decks.push({ id: id, name: t, cards: [] });
+      deckId = id; save(); deckOptions(); showEdit();
+    };
+    $('#fcDel', body).onclick = () => {
+      if (decks.length < 2) return toast('Flashcards', 'Keep at least one deck');
+      const d = deck();
+      if (!confirm('Delete "' + d.name + '" and its ' + d.cards.length + ' cards?')) return;
+      decks = decks.filter(x => x.id !== d.id);
+      deckId = decks[0].id; save(); deckOptions(); showList();
+    };
+    deckOptions();
+    showList();
   }
 };
 

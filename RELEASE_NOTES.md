@@ -40,12 +40,28 @@ dependencies, no installs, no accounts — just open it.
 - Zoom & scale, more personalisation (corners, font, transparency, wallpaper fit and
   dimming), and an update checker that reads this repository's releases.
 
+## New tools in 3.2
+
+- **Sheets** — a spreadsheet with `=SUM`, `=AVERAGE`, `=MIN`, `=MAX`, `=COUNT`, ranges and
+  ordinary arithmetic (`=A1+B2*2`), arrow-key navigation, CSV export and saving into Files.
+- **Text Tools** — 29 converters in one window: case styles, Base64/URL/HTML encode and
+  decode, JSON pretty/minify/validate, SHA-1/256/512 hashes, line tools (sort, dedupe,
+  number, reverse), UUID and random generators, and counts with reading time.
+- **System Info** — screen, cores, memory, touch points, language, timezone, real WebGL
+  renderer, network estimates, battery and storage; copy the report or save it as .txt.
+- **Colour Studio** — shades, tints, complementary/triadic/analogous harmonies, HSL and
+  luminance, plus WCAG contrast checks; click any swatch to copy its hex.
+- **Typing Test** — 30 random words, live WPM and accuracy, 60-second limit.
+- **Flashcards** — decks you can add to, shuffle, study and score, with a best-run record.
+
 ## Highlights
 
-- **27 apps** — Files, Notepad, Calculator, Terminal, Settings, Nova Browser, Paint,
+- **33 apps** — Files, Notepad, Calculator, Terminal, Settings, Nova Browser, Paint,
   Music Studio, Clock/Timer, Task Manager, Colour Picker, QR Code, Password Generator,
   Calendar, Sticky Notes, Media Player, Code Editor, **HTML Viewer**, **My Apps**,
-  **Arcade**, Photos, AI Assistant, Recycle Bin, Clipboard, Run, Widgets and About
+  **Arcade**, **Sheets**, **Text Tools**, **System Info**, **Colour Studio**,
+  **Typing Test**, **Flashcards**, Photos, AI Assistant, Recycle Bin, Clipboard, Run,
+  Widgets and About
 - **Arcade** with 28 built-in games (including a play-money casino) and a proper menu —
   categories, search, best scores, chips
 - **Window manager** with drag, resize, minimise/maximise, edge-snapping and an Alt+Tab
