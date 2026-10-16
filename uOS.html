@@ -16,6 +16,7 @@
   --tb-h:48px;
 }
 html[data-theme="dark"]{
+  color-scheme:dark;
   --bg:#0b0f17;
   --surface:rgba(28,32,42,.72);
   --surface-solid:#1c2029;
@@ -29,6 +30,7 @@ html[data-theme="dark"]{
   --field-hover:rgba(255,255,255,.11);
 }
 html[data-theme="light"]{
+  color-scheme:light;
   --bg:#eef1f6;
   --surface:rgba(252,253,255,.82);
   --surface-solid:#fbfcff;
@@ -391,6 +393,12 @@ table.sheet td.sel{outline:2px solid var(--accent);outline-offset:-2px;backgroun
   padding:8px 11px;color:var(--text);font-size:13px;outline:none;font-family:inherit;width:100%;
 }
 .field:focus{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
+/* native dropdowns and their option lists: solid, theme-coloured, legible.
+   Without this a translucent .field background makes the popup paint white
+   while the option text stays near-white. */
+select,select.field{background:var(--surface-solid);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:7px 9px;font-family:inherit;font-size:13px;outline:none;max-width:100%}
+select:focus,select.field:focus{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
+select option,select optgroup{background:var(--surface-solid);color:var(--text)}
 input[type=range]{accent-color:var(--accent)}
 label.rowlab{display:flex;align-items:center;justify-content:space-between;gap:14px;font-size:13px;padding:9px 0}
 .toolbar{display:flex;align-items:center;gap:6px;padding:8px;border-bottom:1px solid var(--border);flex-wrap:wrap;background:var(--surface-2)}
