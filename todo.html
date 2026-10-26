@@ -1,0 +1,954 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>todo</title>
+  <style>
+    :root {
+      --bg: #fafafa;
+      --fg: #18181b;
+      --muted: #8e8e96;
+      --subtle: #f0f0f2;
+      --panel: #f4f4f6;
+      --ease: cubic-bezier(0.22, 1, 0.36, 1);
+      --font-size: 15px;
+      color-scheme: light;
+    }
+
+    [data-theme="dark"] {
+      --bg: #0f0f11;
+      --fg: #f4f4f5;
+      --muted: #63636b;
+      --subtle: #18181c;
+      --panel: #141417;
+      color-scheme: dark;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --bg: #0f0f11;
+        --fg: #f4f4f5;
+        --muted: #63636b;
+        --subtle: #18181c;
+        --panel: #141417;
+        color-scheme: dark;
+      }
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      border: none;
+      outline: none;
+      text-transform: lowercase;
+      -webkit-font-smoothing: antialiased;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--fg);
+      font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+      font-size: var(--font-size);
+      line-height: 1.5;
+      min-height: 100vh;
+      min-height: 100dvh;
+      display: flex;
+      justify-content: center;
+      padding: 10vh 20px 14vh;
+      transition: background-color 0.4s var(--ease), color 0.4s var(--ease), font-size 0.25s var(--ease);
+    }
+
+    main {
+      width: 100%;
+      max-width: 480px;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    h1 {
+      font-size: 1em;
+      font-weight: 500;
+      letter-spacing: -0.02em;
+      color: var(--muted);
+    }
+
+    .actions {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin-right: -10px;
+    }
+
+    .btn {
+      background: transparent;
+      color: var(--fg);
+      font-family: inherit;
+      font-size: 1em;
+      cursor: pointer;
+      padding: 8px 12px;
+      border-radius: 10px;
+      transition: background-color 0.25s var(--ease), transform 0.2s var(--ease), color 0.2s var(--ease), opacity 0.2s var(--ease);
+      user-select: none;
+    }
+
+    .btn.muted {
+      color: var(--muted);
+    }
+
+    .btn:hover {
+      background-color: var(--subtle);
+      color: var(--fg);
+    }
+
+    .btn:active {
+      transform: scale(0.95);
+    }
+
+    /* Settings Drawer */
+    .settings-wrapper {
+      display: grid;
+      grid-template-rows: 0fr;
+      opacity: 0;
+      margin-bottom: 0;
+      transition:
+        grid-template-rows 0.4s var(--ease),
+        opacity 0.3s var(--ease),
+        margin-bottom 0.4s var(--ease);
+    }
+
+    .settings-wrapper.open {
+      grid-template-rows: 1fr;
+      opacity: 1;
+      margin-bottom: 28px;
+    }
+
+    .settings-inner {
+      overflow: hidden;
+    }
+
+    .settings-panel {
+      background-color: var(--panel);
+      border-radius: 14px;
+      padding: 16px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .setting-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      font-size: 0.92em;
+    }
+
+    .setting-label {
+      color: var(--muted);
+    }
+
+    .segmented {
+      display: flex;
+      gap: 2px;
+      background-color: var(--bg);
+      padding: 3px;
+      border-radius: 9px;
+    }
+
+    .segmented button {
+      background: transparent;
+      color: var(--muted);
+      font: inherit;
+      font-size: 0.9em;
+      padding: 4px 10px;
+      border-radius: 7px;
+      cursor: pointer;
+      transition: background-color 0.25s var(--ease), color 0.25s var(--ease);
+    }
+
+    .segmented button.active {
+      background-color: var(--subtle);
+      color: var(--fg);
+    }
+
+    .setting-action {
+      background: var(--bg);
+      color: var(--muted);
+      font: inherit;
+      font-size: 0.9em;
+      padding: 5px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background-color 0.2s var(--ease), color 0.2s var(--ease), transform 0.2s var(--ease);
+    }
+
+    .setting-action:hover {
+      color: var(--fg);
+      background: var(--subtle);
+    }
+
+    .setting-action:active {
+      transform: scale(0.96);
+    }
+
+    /* Lists */
+    ul {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .item-wrapper {
+      display: grid;
+      grid-template-rows: 1fr;
+      opacity: 1;
+      transform: translateY(0);
+      transition:
+        grid-template-rows 0.38s var(--ease),
+        opacity 0.32s var(--ease),
+        transform 0.38s var(--ease);
+    }
+
+    .item-wrapper.entering {
+      grid-template-rows: 0fr;
+      opacity: 0;
+      transform: translateY(-8px);
+    }
+
+    .item-wrapper.removing {
+      grid-template-rows: 0fr;
+      opacity: 0;
+      transform: translateY(4px);
+    }
+
+    .item-inner {
+      overflow: hidden;
+    }
+
+    .item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      margin: 0 -12px;
+      border-radius: 12px;
+      transition: background-color 0.25s var(--ease), opacity 0.3s var(--ease);
+    }
+
+    .item:hover,
+    .item:focus-within {
+      background-color: var(--subtle);
+    }
+
+    /* Check circle */
+    .check {
+      width: 22px;
+      height: 22px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      cursor: pointer;
+      flex-shrink: 0;
+      margin: -4px;
+    }
+
+    .check-dot {
+      width: 13px;
+      height: 13px;
+      border-radius: 50%;
+      background-color: var(--muted);
+      opacity: 0.32;
+      transform: scale(1);
+      transition: opacity 0.3s var(--ease), transform 0.3s var(--ease), background-color 0.3s var(--ease);
+    }
+
+    .check:hover .check-dot {
+      opacity: 0.65;
+      transform: scale(1.15);
+    }
+
+    .item.done .check-dot {
+      background-color: var(--fg);
+      opacity: 0.85;
+      transform: scale(0.75);
+    }
+
+    /* Text & Smooth Animated Strikethrough */
+    .text-wrap {
+      position: relative;
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      align-items: center;
+    }
+
+    .text-input {
+      width: 100%;
+      background: transparent;
+      color: var(--fg);
+      font: inherit;
+      padding: 2px 0;
+      transition: color 0.38s var(--ease), opacity 0.38s var(--ease);
+    }
+
+    .text-input::placeholder {
+      color: var(--muted);
+      opacity: 0.4;
+    }
+
+    .item.done .text-input {
+      color: var(--muted);
+      opacity: 0.6;
+    }
+
+    .strike-measure {
+      position: absolute;
+      left: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      visibility: hidden;
+      white-space: pre;
+      font: inherit;
+      pointer-events: none;
+      max-width: 100%;
+      overflow: hidden;
+    }
+
+    .strike-line {
+      position: absolute;
+      left: 0;
+      top: 52%;
+      height: 1.5px;
+      background-color: var(--muted);
+      width: var(--strike-w, 0px);
+      max-width: 100%;
+      transform: scaleX(0);
+      transform-origin: left center;
+      pointer-events: none;
+      opacity: 0.75;
+      transition: transform 0.38s var(--ease), background-color 0.38s var(--ease);
+    }
+
+    .item.done .strike-line {
+      transform: scaleX(1);
+    }
+
+    /* Working Cross-Device Date Button */
+    .date-wrap {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      flex-shrink: 0;
+    }
+
+    .date-label {
+      color: var(--muted);
+      font-size: 0.86em;
+      padding: 4px 8px;
+      border-radius: 7px;
+      opacity: 0.65;
+      white-space: nowrap;
+      cursor: pointer;
+      transition: opacity 0.2s var(--ease), color 0.2s var(--ease), background-color 0.2s var(--ease);
+    }
+
+    .date-wrap:hover .date-label,
+    .date-wrap:focus-within .date-label {
+      opacity: 1;
+      color: var(--fg);
+      background-color: var(--bg);
+    }
+
+    .date-label.has-date {
+      opacity: 0.85;
+    }
+
+    .date-input {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0;
+      cursor: pointer;
+      font-size: 16px;
+    }
+
+    .date-input::-webkit-calendar-picker-indicator {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      opacity: 0;
+      cursor: pointer;
+    }
+
+    .remove-btn {
+      background: transparent;
+      color: var(--muted);
+      font: inherit;
+      font-size: 1.1em;
+      line-height: 1;
+      cursor: pointer;
+      opacity: 0;
+      padding: 4px 6px;
+      border-radius: 6px;
+      flex-shrink: 0;
+      transition: opacity 0.2s var(--ease), color 0.2s var(--ease), transform 0.2s var(--ease);
+    }
+
+    .item:hover .remove-btn,
+    .item:focus-within .remove-btn {
+      opacity: 0.5;
+    }
+
+    .remove-btn:hover {
+      opacity: 1 !important;
+      color: var(--fg);
+    }
+
+    /* Done Section */
+    .done-section {
+      margin-top: 32px;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(6px);
+      transition: opacity 0.35s var(--ease), transform 0.35s var(--ease);
+    }
+
+    .done-section.visible {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateY(0);
+    }
+
+    .done-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      user-select: none;
+    }
+
+    .done-toggle {
+      background: transparent;
+      color: var(--muted);
+      font: inherit;
+      font-size: 0.88em;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 8px;
+      margin-left: -8px;
+      border-radius: 8px;
+      opacity: 0.7;
+      transition: opacity 0.2s var(--ease), background-color 0.2s var(--ease), color 0.2s var(--ease);
+    }
+
+    .done-toggle:hover {
+      opacity: 1;
+      color: var(--fg);
+      background-color: var(--subtle);
+    }
+
+    .done-List-wrap {
+      display: grid;
+      grid-template-rows: 1fr;
+      opacity: 1;
+      transition: grid-template-rows 0.38s var(--ease), opacity 0.3s var(--ease);
+    }
+
+    .done-List-wrap.collapsed {
+      grid-template-rows: 0fr;
+      opacity: 0;
+    }
+
+    .done-List-inner {
+      overflow: hidden;
+    }
+
+    .empty {
+      color: var(--muted);
+      opacity: 0;
+      font-size: 0.92em;
+      padding: 8px 0;
+      pointer-events: none;
+      height: 0;
+      overflow: hidden;
+      transition: opacity 0.4s var(--ease), height 0.3s var(--ease);
+    }
+
+    .empty.visible {
+      opacity: 0.45;
+      height: 36px;
+    }
+
+    /* Mobile Compatibility & Touch Ergonomics */
+    @media (max-width: 600px) {
+      body {
+        padding: 5vh 18px 12vh;
+      }
+
+      .item {
+        padding: 12px 10px;
+        margin: 0 -10px;
+        gap: 10px;
+      }
+
+      /* Prevent iOS zoom on input focus */
+      .text-input {
+        font-size: 16px;
+      }
+
+      /* Always show subtle remove button on touch screens */
+      .remove-btn {
+        opacity: 0.4;
+        padding: 6px 8px;
+      }
+
+      .date-label {
+        padding: 6px 8px;
+      }
+
+      .setting-row {
+        flex-wrap: wrap;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div class="brand">
+        <h1>todo</h1>
+      </div>
+      <div class="actions">
+        <button id="menu-btn" class="btn muted" type="button" aria-label="settings">menu</button>
+        <button id="add-btn" class="btn" type="button">+ add</button>
+      </div>
+    </header>
+
+    <section id="settings-drawer" class="settings-wrapper" aria-hidden="true">
+      <div class="settings-inner">
+        <div class="settings-panel">
+          <div class="setting-row">
+            <span class="setting-label">theme</span>
+            <div class="segmented" id="theme-group">
+              <button type="button" data-theme-val="auto">auto</button>
+              <button type="button" data-theme-val="light">light</button>
+              <button type="button" data-theme-val="dark">dark</button>
+            </div>
+          </div>
+          <div class="setting-row">
+            <span class="setting-label">text size</span>
+            <div class="segmented" id="size-group">
+              <button type="button" data-size-val="14px">small</button>
+              <button type="button" data-size-val="15px">normal</button>
+              <button type="button" data-size-val="17px">large</button>
+            </div>
+          </div>
+          <div class="setting-row">
+            <span class="setting-label">done section</span>
+            <div class="segmented" id="done-vis-group">
+              <button type="button" data-done-val="show">show</button>
+              <button type="button" data-done-val="hide">hide</button>
+            </div>
+          </div>
+          <div class="setting-row">
+            <span class="setting-label">sort active by due date</span>
+            <button type="button" id="sort-btn" class="setting-action">sort now</button>
+          </div>
+          <div class="setting-row">
+            <span class="setting-label">completed items</span>
+            <button type="button" id="clear-done-btn" class="setting-action">clear done</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <ul id="active-list"></ul>
+    <div id="empty" class="empty">nothing here yet</div>
+
+    <section id="done-section" class="done-section">
+      <div class="done-header">
+        <button id="done-toggle" class="done-toggle" type="button">
+          <span id="done-label">done (0)</span>
+        </button>
+      </div>
+      <div id="done-wrap" class="done-List-wrap">
+        <div class="done-List-inner">
+          <ul id="done-list"></ul>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const activeListEl = document.getElementById('active-list');
+    const doneListEl = document.getElementById('done-list');
+    const doneSectionEl = document.getElementById('done-section');
+    const doneToggleBtn = document.getElementById('done-toggle');
+    const doneLabelEl = document.getElementById('done-label');
+    const doneWrapEl = document.getElementById('done-wrap');
+    const addBtn = document.getElementById('add-btn');
+    const menuBtn = document.getElementById('menu-btn');
+    const settingsDrawer = document.getElementById('settings-drawer');
+    const emptyEl = document.getElementById('empty');
+
+    const ITEMS_KEY = 'minimal_todo_items';
+    const SETTINGS_KEY = 'minimal_todo_settings';
+
+    let items = JSON.parse(localStorage.getItem(ITEMS_KEY) || '[]');
+    let settings = Object.assign({
+      theme: 'auto',
+      size: '15px',
+      showDone: 'show',
+      doneCollapsed: false
+    }, JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}'));
+
+    function saveItems() {
+      localStorage.setItem(ITEMS_KEY, JSON.stringify(items));
+      updateCounts();
+    }
+
+    function saveSettings() {
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+      applySettings();
+    }
+
+    function applySettings() {
+      if (settings.theme === 'auto') {
+        document.documentElement.removeAttribute('data-theme');
+      } else {
+        document.documentElement.setAttribute('data-theme', settings.theme);
+      }
+      document.documentElement.style.setProperty('--font-size', settings.size);
+
+      document.querySelectorAll('#theme-group button').forEach(b => {
+        b.classList.toggle('active', b.dataset.themeVal === settings.theme);
+      });
+      document.querySelectorAll('#size-group button').forEach(b => {
+        b.classList.toggle('active', b.dataset.sizeVal === settings.size);
+      });
+      document.querySelectorAll('#done-vis-group button').forEach(b => {
+        b.classList.toggle('active', b.dataset.doneVal === settings.showDone);
+      });
+
+      doneWrapEl.classList.toggle('collapsed', settings.doneCollapsed);
+      updateCounts();
+      refreshAllStrikeWidths();
+    }
+
+    function formatDate(dateStr) {
+      if (!dateStr) return 'date';
+      const parts = dateStr.split('-');
+      if (parts.length !== 3) return dateStr;
+      const y = parseInt(parts[0], 10);
+      const m = parseInt(parts[1], 10) - 1;
+      const d = parseInt(parts[2], 10);
+      const date = new Date(y, m, d);
+      if (isNaN(date.getTime())) return 'date';
+
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const diffDays = Math.round((date - today) / 86400000);
+
+      if (diffDays === 0) return 'today';
+      if (diffDays === 1) return 'tomorrow';
+      if (diffDays === -1) return 'yesterday';
+
+      const months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+      return `${months[m]} ${d}`;
+    }
+
+    function updateCounts() {
+      const activeCount = items.filter(i => !i.done).length;
+      const doneCount = items.filter(i => i.done).length;
+
+      emptyEl.classList.toggle('visible', activeCount === 0 && doneCount === 0);
+      doneLabelEl.textContent = settings.doneCollapsed
+        ? `done (${doneCount}) +`
+        : `done (${doneCount})`;
+
+      const shouldShowDoneSection = doneCount > 0 && settings.showDone === 'show';
+      doneSectionEl.classList.toggle('visible', shouldShowDoneSection);
+    }
+
+    function updateStrikeWidth(li) {
+      const textInput = li.querySelector('.text-input');
+      const measure = li.querySelector('.strike-measure');
+      const line = li.querySelector('.strike-line');
+      if (!textInput || !measure || !line) return;
+
+      measure.textContent = textInput.value || textInput.placeholder || '';
+      const width = measure.getBoundingClientRect().width;
+      line.style.setProperty('--strike-w', `${Math.ceil(width)}px`);
+    }
+
+    function refreshAllStrikeWidths() {
+      requestAnimationFrame(() => {
+        document.querySelectorAll('.item-wrapper').forEach(updateStrikeWidth);
+      });
+    }
+
+    function createItemElement(item, animate = false) {
+      const li = document.createElement('li');
+      li.className = 'item-wrapper' + (animate ? ' entering' : '');
+      li.dataset.id = item.id;
+
+      const formatted = formatDate(item.date);
+
+      li.innerHTML = `
+        <div class="item-inner">
+          <div class="item ${item.done ? 'done' : ''}">
+            <button class="check" type="button" aria-label="toggle complete">
+              <span class="check-dot"></span>
+            </button>
+            <div class="text-wrap">
+              <input
+                class="text-input"
+                type="text"
+                placeholder="something to do..."
+                value="${(item.text || '').replace(/"/g, '&quot;')}"
+                spellcheck="false"
+              />
+              <span class="strike-measure" aria-hidden="true"></span>
+              <span class="strike-line" aria-hidden="true"></span>
+            </div>
+            <label class="date-wrap">
+              <span class="date-label ${item.date ? 'has-date' : ''}">${formatted}</span>
+              <input
+                class="date-input"
+                type="date"
+                value="${item.date || ''}"
+              />
+            </label>
+            <button class="remove-btn" type="button" aria-label="remove">×</button>
+          </div>
+        </div>
+      `;
+
+      const row = li.querySelector('.item');
+      const checkBtn = li.querySelector('.check');
+      const textInput = li.querySelector('.text-input');
+      const dateWrap = li.querySelector('.date-wrap');
+      const dateLabel = li.querySelector('.date-label');
+      const dateInput = li.querySelector('.date-input');
+      const removeBtn = li.querySelector('.remove-btn');
+
+      requestAnimationFrame(() => updateStrikeWidth(li));
+
+      let moving = false;
+      checkBtn.addEventListener('click', () => {
+        if (moving) return;
+        moving = true;
+
+        item.done = !item.done;
+        updateStrikeWidth(li);
+        row.classList.toggle('done', item.done);
+        saveItems();
+
+        // Let the smooth strikethrough animation play first, then glide to the target section
+        setTimeout(() => {
+          li.classList.add('removing');
+          setTimeout(() => {
+            li.remove();
+            const { li: newLi } = createItemElement(item, true);
+            if (item.done) {
+              doneListEl.prepend(newLi);
+            } else {
+              activeListEl.appendChild(newLi);
+            }
+          }, 340);
+        }, 360);
+      });
+
+      textInput.addEventListener('input', (e) => {
+        item.text = e.target.value.toLowerCase();
+        updateStrikeWidth(li);
+        saveItems();
+      });
+
+      textInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          openDatePicker(dateInput);
+        } else if (e.key === 'Backspace' && textInput.value === '' && !item.date) {
+          e.preventDefault();
+          removeItem(item.id, li);
+        }
+      });
+
+      // Ensure clicking the date label opens the native picker reliably across desktop & mobile
+      dateWrap.addEventListener('click', (e) => {
+        if (e.target !== dateInput) {
+          e.preventDefault();
+          openDatePicker(dateInput);
+        }
+      });
+
+      dateInput.addEventListener('click', (e) => {
+        if (typeof dateInput.showPicker === 'function') {
+          try {
+            dateInput.showPicker();
+          } catch (_) {}
+        }
+      });
+
+      dateInput.addEventListener('change', (e) => {
+        item.date = e.target.value;
+        dateLabel.textContent = formatDate(item.date);
+        dateLabel.classList.toggle('has-date', Boolean(item.date));
+        saveItems();
+      });
+
+      removeBtn.addEventListener('click', () => {
+        removeItem(item.id, li);
+      });
+
+      if (animate) {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            li.classList.remove('entering');
+            updateStrikeWidth(li);
+          });
+        });
+      }
+
+      return { li, textInput };
+    }
+
+    function openDatePicker(dateInput) {
+      if (typeof dateInput.showPicker === 'function') {
+        try {
+          dateInput.showPicker();
+          return;
+        } catch (_) {}
+      }
+      dateInput.focus();
+      dateInput.click();
+    }
+
+    function removeItem(id, element) {
+      items = items.filter((i) => i.id !== id);
+      saveItems();
+      element.classList.add('removing');
+      setTimeout(() => {
+        element.remove();
+      }, 360);
+    }
+
+    function addItem() {
+      const newItem = {
+        id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+        text: '',
+        date: '',
+        done: false
+      };
+      items.unshift(newItem);
+      saveItems();
+
+      const { li, textInput } = createItemElement(newItem, true);
+      activeListEl.prepend(li);
+      textInput.focus();
+    }
+
+    function renderAll() {
+      activeListEl.innerHTML = '';
+      doneListEl.innerHTML = '';
+
+      items.forEach((item) => {
+        const { li } = createItemElement(item, false);
+        if (item.done) {
+          doneListEl.appendChild(li);
+        } else {
+          activeListEl.appendChild(li);
+        }
+      });
+      updateCounts();
+    }
+
+    // Event Listeners
+    addBtn.addEventListener('click', addItem);
+
+    menuBtn.addEventListener('click', () => {
+      const isOpen = settingsDrawer.classList.toggle('open');
+      settingsDrawer.setAttribute('aria-hidden', String(!isOpen));
+      menuBtn.textContent = isOpen ? 'close' : 'menu';
+    });
+
+    doneToggleBtn.addEventListener('click', () => {
+      settings.doneCollapsed = !settings.doneCollapsed;
+      saveSettings();
+    });
+
+    document.getElementById('theme-group').addEventListener('click', (e) => {
+      const btn = e.target.closest('button');
+      if (!btn) return;
+      settings.theme = btn.dataset.themeVal;
+      saveSettings();
+    });
+
+    document.getElementById('size-group').addEventListener('click', (e) => {
+      const btn = e.target.closest('button');
+      if (!btn) return;
+      settings.size = btn.dataset.sizeVal;
+      saveSettings();
+    });
+
+    document.getElementById('done-vis-group').addEventListener('click', (e) => {
+      const btn = e.target.closest('button');
+      if (!btn) return;
+      settings.showDone = btn.dataset.doneVal;
+      saveSettings();
+    });
+
+    document.getElementById('sort-btn').addEventListener('click', () => {
+      const active = items.filter(i => !i.done).sort((a, b) => {
+        if (!a.date && !b.date) return 0;
+        if (!a.date) return 1;
+        if (!b.date) return -1;
+        return a.date.localeCompare(b.date);
+      });
+      const done = items.filter(i => i.done);
+      items = [...active, ...done];
+      saveItems();
+      renderAll();
+    });
+
+    document.getElementById('clear-done-btn').addEventListener('click', () => {
+      const doneElements = doneListEl.querySelectorAll('.item-wrapper');
+      doneElements.forEach(el => el.classList.add('removing'));
+      setTimeout(() => {
+        items = items.filter(i => !i.done);
+        saveItems();
+        renderAll();
+      }, 340);
+    });
+
+    window.addEventListener('resize', refreshAllStrikeWidths);
+
+    // Initialize
+    applySettings();
+    renderAll();
+  </script>
+</body>
+</html>

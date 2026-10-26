@@ -11,8 +11,9 @@ dependencies, no installs, no accounts — just open it.
   and how big you left it (maximised state included). Toggle in Settings → Windows.
 - **Command palette** — **Ctrl+K** searches apps, files, settings sections and commands.
   Type, arrow, Enter. Everything is one keystroke away.
-- **Virtual desktops** — four desktops with a pager in the taskbar. Ctrl+Alt+1–4 or
-  Ctrl+Alt+arrows switch; add Shift to send the active window across.
+- **Virtual desktops** — workspaces, currently configured as a **single desktop** (raise
+  `DESK_COUNT` for up to four, which brings back the taskbar pager, Ctrl+Alt+1–4 / arrows
+  to switch, and Shift to send the active window across).
 - **Snap layouts** — drag a window to the top edge and pick a zone (halves, thirds,
   quarters, main+side). Hover to preview, release to snap.
 - **User profiles** — separate files, settings, desktop, games and chips per person.
