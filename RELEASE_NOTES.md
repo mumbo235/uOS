@@ -15,11 +15,17 @@ dependencies, no installs, no accounts — just open it.
 - **A real window menu.** Right-click any taskbar button: Restore / Minimise, Maximise or
   Restore size, Snap left, Snap right, Pin or unpin, Open another window, Move to
   desktop, and Close (in red).
-- **YouTube and Spotify are web apps, not browser tabs.** Both have their own icon on the
-  desktop (and in the Start menu, search and Run) and open in their own app window with no
-  tabs and no address bar. Both sites refuse to be embedded in a page, so they run as
-  separate windows; if your browser blocks that window, uOS shows a card with the link,
-  a retry and a copy button instead of a blank frame.
+- **YouTube and Spotify are apps inside uOS.** Each has its own icon on the desktop
+  (plus Start menu, search and Run) and its own window: paste a link and the site's
+  official player runs right there, with a library strip underneath that keeps what you
+  opened — real video titles, track names and cover art included. No browser tabs, no
+  address bar. Both sites block their normal pages from being framed, so uOS uses the
+  embed players they publish for exactly this.
+  YouTube's player needs uOS served over http(s); opened as a local file it shows its own
+  error 153 - the published copy is fine.
+- **Letter avatars.** Account pictures are your initial in a coloured circle instead of an
+  emoji — the avatar picker is gone, and the same circle appears on the sign-in screen,
+  the Start menu, the profile panel, the lock screen and in the Assistant.
 - **The sign-in screen appears on every start** — pick an account, sign in (password
   optional), tick *Remember this device*, or skip.
 - **Fixed, honest AI limits.** The assistant's 20/minute and 100/day caps are baked in and

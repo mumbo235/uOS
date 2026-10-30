@@ -278,7 +278,8 @@ table.sheet td.sel{outline:2px solid var(--accent);outline-offset:-2px;backgroun
 .prof-tile{display:flex;flex-direction:column;align-items:center;gap:8px;padding:16px 8px;border-radius:12px;background:var(--field);border:1px solid transparent;transition:transform .12s,background .12s,border-color .12s}
 .prof-tile:hover{transform:translateY(-2px);background:var(--field-hover);border-color:var(--accent)}
 .prof-tile.on{border-color:var(--accent);background:var(--accent-soft)}
-.prof-tile .ava{font-size:34px;line-height:1;width:56px;height:56px;display:grid;place-items:center;border-radius:50%;background:var(--surface-2)}
+.prof-tile .ava{font-size:24px;width:56px;height:56px;display:grid;place-items:center;border-radius:50%;background:var(--surface-2)}
+.prof-tile .ava.add{font-size:26px;font-weight:400;color:var(--text-dim);background:var(--surface-2)}
 .prof-tile .nm{font-size:12.5px;font-weight:600;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .prof-tile .badge{font-size:10px;color:var(--accent)}
 .prof-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;border-top:1px solid var(--border);padding-top:12px}
@@ -296,7 +297,8 @@ table.sheet td.sel{outline:2px solid var(--accent);outline-offset:-2px;backgroun
 .si-list{display:flex;gap:14px;flex-wrap:wrap;justify-content:center}
 .si-tile{display:flex;flex-direction:column;align-items:center;gap:7px;padding:12px 10px;border-radius:12px;background:rgba(255,255,255,.05);border:1px solid transparent;min-width:104px}
 .si-tile:hover{background:rgba(255,255,255,.1);border-color:#8fb7ff}
-.si-ava{width:74px;height:74px;border-radius:50%;display:grid;place-items:center;font-size:36px;background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.14)}
+.si-ava{width:74px;height:74px;border-radius:50%;display:grid;place-items:center;font-size:30px;background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.14)}
+.avin{border-radius:50%;display:grid;place-items:center;font-weight:600;letter-spacing:.01em;color:#fff;line-height:1;flex:0 0 auto;user-select:none}
 .si-name{font-size:13.5px;font-weight:600;color:#fff;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .si-sub{font-size:10px;color:#7f8ca3}
 .si-who{display:flex;flex-direction:column;align-items:center;gap:7px}
@@ -847,6 +849,28 @@ body.cursor-lg,body.cursor-lg *{
   #clock small{display:none}
   .key{width:34px;height:110px}
 }
+
+/* in-OS media apps (YouTube / Spotify) */
+.mad{display:flex;flex-direction:column;height:100%;min-height:0;background:var(--panel)}
+.mad-bar{display:flex;align-items:center;gap:8px;padding:9px 10px;border-bottom:1px solid var(--border);flex:0 0 auto}
+.mad-brand{display:flex;align-items:center;gap:8px;font-weight:600;font-size:13px;white-space:nowrap;color:var(--text)}
+.mad-ico{width:22px;height:22px;display:block;flex:0 0 auto}
+.mad-in{flex:1 1 auto;min-width:90px}
+.mad-stage{flex:1 1 auto;min-height:0;background:#000;display:grid}
+.mad-stage iframe{width:100%;height:100%;border:0;display:block;background:#000}
+.mad-lib{flex:0 0 auto;display:flex;gap:9px;padding:9px 10px;overflow-x:auto;overflow-y:hidden;border-top:1px solid var(--border);min-height:104px}
+.mad-wrap{position:relative;flex:0 0 auto;width:136px}
+.mad-card{display:block;width:100%;padding:0;background:none;text-align:left;border-radius:8px}
+.mad-card .th{width:136px;height:76px;border-radius:8px;background:var(--field);display:grid;place-items:center;overflow:hidden;font-size:20px;color:var(--text-dim)}
+.mad-card .th img{width:100%;height:100%;object-fit:cover;display:block}
+.mad-card .nm{margin-top:5px;font-size:11px;line-height:1.3;color:var(--text-dim);height:2.6em;overflow:hidden}
+.mad-wrap.on .th{outline:2px solid var(--accent);outline-offset:-2px}
+.mad-wrap.on .nm{color:var(--text)}
+.mad-wrap .rm{position:absolute;top:4px;right:4px;width:20px;height:20px;border-radius:50%;background:#000000a8;color:#fff;font-size:12px;line-height:1;display:none;place-items:center;padding:0}
+.mad-wrap:hover .rm{display:grid}
+.mad-stage .mad-empty{align-self:center;justify-self:center}
+.mad-empty{padding:26px 20px;text-align:center;color:var(--text-dim);font-size:12.5px;line-height:1.6}
+.mad-note{display:flex;align-items:center;gap:10px;padding:8px 12px;font-size:11.5px;line-height:1.45;background:rgba(255,176,32,.14);border-bottom:1px solid var(--border);color:var(--text)}
 </style>
 </head>
 <body>
@@ -1088,7 +1112,7 @@ function migrateProfiles(){
     /* A brand-new install still needs one account record for the person using
        it, otherwise the profile picker and Settings > Users have nothing. */
     const id = localStorage.getItem(ACTIVE_KEY) || 'default';
-    localStorage.setItem(PROFILES_KEY, JSON.stringify([{ id: id, name: 'Me', avatar: '🧑' }]));
+    localStorage.setItem(PROFILES_KEY, JSON.stringify([{ id: id, name: 'Me' }]));
     if (!localStorage.getItem(ACTIVE_KEY)) localStorage.setItem(ACTIVE_KEY, id);
     /* Older builds stored everything as uos.<key>: copy it into this profile. */
     if (legacy.length){
@@ -1450,8 +1474,7 @@ function applyTheme(){
     desk.style.setProperty('--wall-dim', String(Math.max(0, Math.min(80, Number(settings.wallDim) || 0)) / 100));
   }
   const u = $('#smUser'); if (u) u.textContent = settings.user;
-  const ava = (settings.avatar || '').trim() || (settings.user[0] || 'U').toUpperCase();
-  $$('#smAvatar').forEach(a => { a.textContent = ava; });
+  $$('#smAvatar').forEach(a => { a.textContent = avatarInitial(settings.user); });
   startSlideshow();
 }
 /* wallpaper slideshow */
@@ -1601,7 +1624,7 @@ function restoreSession(){
   const sess = store.get('session', null);
   if (!sess || !sess.length) return;
   sess.forEach(s => {
-    if (!s || !APPS[s.appId] || APPS[s.appId].webApp) return;
+    if (!s || !APPS[s.appId]) return;
     try {
       const box = openApp(s.appId, Object.assign({}, s.args || {}, { __rect: s.rect, __desk: s.desk }));
       if (box && s.max && !box.maximized) toggleMax(box);
@@ -2488,9 +2511,6 @@ APPS.settings = {
         const person = el('input', { class: 'field', value: settings.user });
         person.style.maxWidth = '200px';
         person.oninput = () => { settings.user = person.value || 'User'; applyTheme(); store.set('settings', settings); };
-        const avatarInput = el('input', { class: 'field', value: settings.avatar || '', placeholder: '🙂' });
-        avatarInput.style.maxWidth = '90px';
-        avatarInput.oninput = () => { settings.avatar = Array.from(avatarInput.value).slice(0, 2).join(''); applyTheme(); store.set('settings', settings); };
         return [
           head('Theme presets'),
           card(presetRow),
@@ -2521,8 +2541,7 @@ APPS.settings = {
           ),
           head('Profile'),
           card(
-            row('User name', person, 'Shown on the Start menu and lock screen'),
-            row('Avatar', avatarInput, 'Any emoji — blank uses your initial')
+            row('User name', person, 'Shown on the Start menu and lock screen — your initial is the picture')
           )
         ];
       },
@@ -2709,19 +2728,10 @@ APPS.settings = {
           const list = profilesGet(); const hit = list.find(x => x.id === p.id);
           if (hit){ hit.name = t; profilesSet(list); }
         };
-        const avIn = el('input', { class: 'field', value: p.avatar || '', placeholder: '🙂' });
-        avIn.style.maxWidth = '90px';
-        avIn.oninput = () => {
-          const t = Array.from(avIn.value.trim()).slice(0, 2).join('') || '🧑';
-          settings.avatar = t; saveSettings();
-          const list = profilesGet(); const hit = list.find(x => x.id === p.id);
-          if (hit){ hit.avatar = t; profilesSet(list); }
-        };
         return [
           head('This profile'),
           card(
-            row('Name', nameIn, 'Shown on the Start menu and lock screen'),
-            row('Picture', avIn, 'Any emoji, or blank for your initial'),
+            row('Name', nameIn, 'Shown on the Start menu and lock screen — your initial is the picture'),
             note('Files, settings, desktop, games and chips are kept separately for each profile.')
           ),
           head('Sign-in'),
@@ -2764,7 +2774,7 @@ APPS.settings = {
           ),
           head('Profiles on this browser'),
           card(
-            row('Signed in as', el('b', {}, p.name + '  ' + (p.avatar || ''))),
+            row('Signed in as', el('b', {}, p.name)),
             row('Count', el('span', { class: 'muted' }, profilesGet().length + ' profile' + (profilesGet().length === 1 ? '' : 's'))),
             row('Switch or add', btnRow(el('button', { class: 'btn primary', onclick: () => showProfiles() }, 'Open the profile picker')))
           ),
@@ -3719,7 +3729,7 @@ APPS.media = {
 
 /* ------------------------------ Code Editor ------------------------- */
 APPS.code = {
-  name: 'Code Editor', icon: '🧑‍💻', w: 820, h: 600,
+  name: 'Code Editor', icon: '</>', w: 820, h: 600,
   mount(body, win, args){
     const starter = '// uOS JavaScript playground\n// Press Run (or Ctrl+Enter) to execute.\n\nconst greet = n => `Hello, ${n}!`;\nconsole.log(greet("cowboy"));\n\nreturn [1,2,3,4,5].reduce((a,b) => a+b, 0);\n';
     body.innerHTML = `
@@ -4400,7 +4410,8 @@ APPS.ai = {
     function bubble(role, html){
       const wrap = el('div', { class: 'ai-msg ' + role });
       const av = el('div', { class: 'ai-avatar' });
-      av.innerHTML = role === 'user' ? '🧑' : iconHTML('ai', '✨');
+      if (role === 'user') av.append(avatarCircle(settings.user));
+      else av.innerHTML = iconHTML('ai', 'AI');
       const b = el('div', { class: 'ai-bubble', html: html || '' });
       wrap.append(av, b);
       msgs.append(wrap);
@@ -4811,55 +4822,192 @@ function openPath(path){
   return openApp('notepad', { file: path });
 }
 
-/* ---------------------------- Web apps ------------------------------
-   YouTube and Spotify refuse to be embedded: YouTube sends
-   X-Frame-Options: SAMEORIGIN and Spotify's CSP is frame-ancestors 'self',
-   so an <iframe> would only ever show a blank page. A normal top-level
-   window is the only thing that works, so these apps launch their own
-   window the way an installed web app would. If the browser blocks it,
-   the card below appears with the link and a retry.                     */
-const WEB_APPS = {
-  youtube: { name: 'YouTube', icon: '\u25B6', url: 'https://www.youtube.com/',
-             w: 1180, h: 780, hint: 'Videos, music videos and live streams' },
-  spotify: { name: 'Spotify', icon: '\u266B', url: 'https://open.spotify.com/',
-             w: 1120, h: 760, hint: 'Music, podcasts and playlists' }
-};
-function launchWebApp(id){
-  const def = WEB_APPS[id];
-  if (!def) return null;
-  const left = Math.max(0, Math.round((screen.availWidth  - def.w) / 2));
-  const top  = Math.max(0, Math.round((screen.availHeight - def.h) / 2));
-  const feats = 'popup=yes,width=' + def.w + ',height=' + def.h + ',left=' + left + ',top=' + top +
-                ',menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=yes';
-  let w = null;
-  try { w = window.open(def.url, 'uos-webapp-' + id, feats); } catch(e){ w = null; }
-  if (w){ try { w.focus(); } catch(e){} }
-  return w;
+/* ------------------------- YouTube / Spotify ------------------------
+   Their normal pages refuse to be framed, but each site's *embed* player
+   is made for iframes. So instead of handing you off to a browser, each
+   app is a real uOS window: the official player on top and a library of
+   links you saved underneath, all kept on this device.
+   Videos whose uploader turned embedding off will say so in the player -
+   that is YouTube's own setting, nothing uOS can override.            */
+function youTubeLink(input){
+  const s = String(input || '').trim();
+  if (!s) return null;
+  const list = (s.match(/[?&]list=([\w-]+)/) || [])[1] || null;
+  const m = s.match(/(?:youtu\.be\/|[?&]v=|\/embed\/|\/shorts\/|\/live\/|\/v\/)([\w-]{11})/);
+  const id = m ? m[1] : (/^[\w-]{11}$/.test(s) ? s : null);
+  if (!id && !list) return null;
+  return { id: id || null, list: list || null, key: id ? 'v:' + id : 'l:' + list,
+           title: id ? 'Video ' + id : 'Playlist ' + list };
 }
-Object.keys(WEB_APPS).forEach(id => {
-  const def = WEB_APPS[id];
+function spotifyLink(input){
+  const s = String(input || '').trim();
+  if (!s) return null;
+  const m = s.match(/spotify\.com\/(?:intl-[\w-]+\/)?(track|album|playlist|artist|show|episode)\/([\w]+)/i)
+         || s.match(/^spotify:(track|album|playlist|artist|show|episode):([\w]+)$/i);
+  if (!m) return null;
+  const kind = m[1].toLowerCase(), sid = m[2];
+  return { kind: kind, id: sid, key: kind + ':' + sid,
+           url: 'https://open.spotify.com/' + kind + '/' + sid,
+           title: kind.charAt(0).toUpperCase() + kind.slice(1) + ' ' + sid.slice(0, 6) };
+}
+/* YouTube posts its own player state to the parent frame, so the real
+   video title can be shown instead of the bare id. */
+const YT_FRAME_ITEM = new WeakMap();
+function ytHandshake(frame){
+  const send = () => { try { frame.contentWindow.postMessage(JSON.stringify({ event: 'listening', id: 1 }), '*'); } catch(e){} };
+  frame.addEventListener('load', () => { send(); setTimeout(send, 1200); });
+}
+window.addEventListener('message', e => {
+  if (e.origin !== 'https://www.youtube.com' && e.origin !== 'https://www.youtube-nocookie.com') return;
+  const hit = e.source && YT_FRAME_ITEM.get(e.source);
+  if (!hit) return;
+  let d = e.data;
+  if (typeof d === 'string'){ try { d = JSON.parse(d); } catch(_) { return; } }
+  const vd = d && d.info && d.info.videoData;
+  if (!vd || !vd.title || !hit.item.id || vd.title === hit.item.title) return;
+  hit.item.title = vd.title;
+  hit.persist();
+  hit.refresh();
+});
+
+const MEDIA_APPS = {
+  youtube: {
+    name: 'YouTube', icon: '\u25B6', w: 960, h: 650,
+    placeholder: 'Paste a YouTube link or video ID',
+    parse: youTubeLink,
+    embed: it => {
+      const origin = /^https?:$/.test(location.protocol) ? '&enablejsapi=1&origin=' + encodeURIComponent(location.origin) : '';
+      return it.list
+        ? 'https://www.youtube.com/embed/videoseries?list=' + encodeURIComponent(it.list) + '&rel=0' + origin
+        : 'https://www.youtube.com/embed/' + it.id + '?rel=0&modestbranding=1' + origin;
+    },
+    thumb: it => it.id ? 'https://i.ytimg.com/vi/' + it.id + '/mqdefault.jpg' : null,
+    glyph: '\u25B6',
+    defaults: [],
+    empty: 'Paste a YouTube link above and it plays right here.<br>Everything you open is kept in the strip below.'
+  },
+  spotify: {
+    name: 'Spotify', icon: '\u266B', w: 900, h: 620,
+    placeholder: 'Paste an open.spotify.com link',
+    parse: spotifyLink,
+    embed: it => 'https://open.spotify.com/embed/' + it.kind + '/' + it.id + '?theme=0',
+    thumb: it => it.thumb || null,
+    glyph: '\u266B',
+    defaults: [
+      { kind: 'playlist', id: '37i9dQZF1DXcBWIGoYBM5M', key: 'playlist:37i9dQZF1DXcBWIGoYBM5M', url: 'https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M', title: "Today's Top Hits" },
+      { kind: 'playlist', id: '37i9dQZF1DX0XUsuxWHRQd', key: 'playlist:37i9dQZF1DX0XUsuxWHRQd', url: 'https://open.spotify.com/playlist/37i9dQZF1DX0XUsuxWHRQd', title: 'RapCaviar' },
+      { kind: 'playlist', id: '37i9dQZF1DWWQRwui0ExPn', key: 'playlist:37i9dQZF1DWWQRwui0ExPn', url: 'https://open.spotify.com/playlist/37i9dQZF1DWWQRwui0ExPn', title: 'Lofi Beats' },
+      { kind: 'playlist', id: '37i9dQZF1DWXRqgorJj26U', key: 'playlist:37i9dQZF1DWXRqgorJj26U', url: 'https://open.spotify.com/playlist/37i9dQZF1DWXRqgorJj26U', title: 'Rock Classics' }
+    ],
+    empty: 'Paste a Spotify track, album or playlist link above.',
+    /* Spotify's oEmbed endpoint allows CORS, so real titles and cover
+       art can be filled in after a link is opened */
+    lookup(item, done){
+      if (!item.url || typeof fetch !== 'function') return;
+      fetch('https://open.spotify.com/oembed?url=' + encodeURIComponent(item.url))
+        .then(r => r.ok ? r.json() : null)
+        .then(j => {
+          if (!j) return;
+          if (j.title) item.title = j.title;
+          if (j.thumbnail_url) item.thumb = j.thumbnail_url;
+          done();
+        })
+        .catch(() => {});
+    }
+  }
+};
+Object.keys(MEDIA_APPS).forEach(id => {
+  const cfg = MEDIA_APPS[id];
+  const libKey = id + 'Library', lastKey = id + 'Last';
   APPS[id] = {
-    name: def.name, icon: def.icon, w: 470, h: 360, single: true, webApp: true,
+    name: cfg.name, icon: cfg.icon, w: cfg.w, h: cfg.h, single: true,
     mount(body, win){
-      const wrap = el('div', { style: 'padding:24px 22px;display:flex;flex-direction:column;gap:16px' });
-      wrap.append(el('div', { style: 'display:flex;gap:15px;align-items:center' },
-        el('div', { style: 'width:60px;height:60px;flex:0 0 auto;border-radius:15px;display:grid;place-items:center;background:var(--field)' },
-          el('span', { style: 'width:40px;height:40px;display:block', html: iconHTML(id, def.icon) })),
-        el('div', { style: 'min-width:0' },
-          el('div', { style: 'font-size:17px;font-weight:600' }, def.name),
-          el('div', { class: 'muted', style: 'font-size:12.5px;margin-top:2px' }, def.hint))));
-      wrap.append(el('div', { class: 'muted', style: 'font-size:12.5px;line-height:1.55' },
-        def.name + ' runs in its own window, like an installed app. This time the browser blocked that window.'));
-      const row = el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap' });
-      row.append(el('button', { class: 'btn primary', onclick: () => {
-        if (launchWebApp(id)) closeWin(win);
-        else toast('Still blocked', 'Allow pop-ups for this page, then press Open again');
-      } }, 'Open ' + def.name));
-      row.append(el('button', { class: 'btn', onclick: () => window.open(def.url, '_blank', 'noopener') }, 'New tab'));
-      row.append(el('button', { class: 'btn', onclick: async () => { if (await copyText(def.url)) toast('Copied', def.url); } }, 'Copy link'));
-      wrap.append(row);
-      wrap.append(el('div', { class: 'muted', style: 'font-size:11.5px;user-select:all' }, def.url));
+      let lib = store.get(libKey, null);
+      if (!Array.isArray(lib)) lib = cfg.defaults.slice();
+      let cur = store.get(lastKey, null) || lib[0] || null;
+
+      body.innerHTML = '';
+      const wrap  = el('div', { class: 'mad' });
+      const bar   = el('div', { class: 'mad-bar' });
+      const inp   = el('input', { class: 'field mad-in', placeholder: cfg.placeholder, spellcheck: 'false', autocomplete: 'off' });
+      const goBtn = el('button', { class: 'btn primary' }, 'Play');
+      const stage = el('div', { class: 'mad-stage' });
+      const strip = el('div', { class: 'mad-lib' });
+      bar.append(el('div', { class: 'mad-brand', title: cfg.name },
+        el('span', { class: 'mad-ico', html: iconHTML(id, cfg.icon) })), inp, goBtn);
+      wrap.append(bar, stage, strip);
+
+      if (id === 'youtube' && location.protocol === 'file:'){
+        const note = el('div', { class: 'mad-note' },
+          el('span', {}, 'YouTube only plays when uOS is served over http(s). Opened as a local file its player shows its own error 153 — use the published copy or a local server.'),
+          el('button', { class: 'btn', style: 'margin-left:auto;flex:0 0 auto', onclick: () => note.remove() }, 'Got it'));
+        wrap.insertBefore(note, stage);
+      }
       body.append(wrap);
+
+      const saveLib = () => store.set(libKey, lib);
+      function render(){
+        stage.innerHTML = '';
+        if (cur){
+          const frame = el('iframe', {
+            src: cfg.embed(cur), title: cur.title || cfg.name,
+            allow: 'autoplay; encrypted-media; fullscreen; picture-in-picture; clipboard-write',
+            allowfullscreen: 'true', referrerpolicy: 'strict-origin-when-cross-origin'
+          });
+          stage.append(frame);
+          if (id === 'youtube' && frame.contentWindow){
+            YT_FRAME_ITEM.set(frame.contentWindow, { item: cur, persist: saveLib, refresh: renderStrip });
+            ytHandshake(frame);
+          }
+        } else {
+          stage.append(el('div', { class: 'mad-empty' }, cfg.empty));
+        }
+        renderStrip();
+      }
+      function renderStrip(){
+        strip.innerHTML = '';
+        if (!lib.length){
+          strip.append(el('div', { class: 'mad-empty', style: 'padding:16px 4px;text-align:left' }, 'Nothing saved yet.'));
+          return;
+        }
+        lib.forEach(it => {
+          const card = el('div', { class: 'mad-wrap' + (cur && cur.key === it.key ? ' on' : '') });
+          const btn = el('button', { class: 'mad-card', title: it.title || it.key });
+          const th = el('div', { class: 'th' });
+          const src = cfg.thumb(it);
+          if (src){
+            const img = el('img', { src: src, alt: '', loading: 'lazy' });
+            img.onerror = () => { th.innerHTML = ''; th.append(el('span', { class: 'g' }, cfg.glyph)); };
+            th.append(img);
+          } else th.append(el('span', { class: 'g' }, cfg.glyph));
+          btn.append(th, el('div', { class: 'nm' }, it.title || it.key));
+          btn.onclick = () => { cur = it; store.set(lastKey, it); render(); };
+          const rm = el('button', { class: 'rm', title: 'Remove from library' }, '\u00d7');
+          rm.onclick = e => {
+            e.stopPropagation();
+            lib = lib.filter(x => x.key !== it.key);
+            if (cur && cur.key === it.key) cur = lib[0] || null;
+            saveLib(); render();
+          };
+          card.append(btn, rm);
+          strip.append(card);
+        });
+      }
+      function submit(){
+        const item = cfg.parse(inp.value);
+        if (!item){ toast(cfg.name, 'That does not look like a ' + cfg.name + ' link'); inp.focus(); return; }
+        inp.value = '';
+        const known = lib.find(x => x.key === item.key);
+        if (known){ cur = known; store.set(lastKey, known); render(); }
+        else {
+          lib = [item].concat(lib); saveLib();
+          cur = item; store.set(lastKey, item); render();
+          if (cfg.lookup) cfg.lookup(item, () => { saveLib(); renderStrip(); });
+        }
+      }
+      goBtn.onclick = submit;
+      inp.onkeydown = e => { if (e.key === 'Enter') submit(); };
+      render();
     }
   };
 });
@@ -8552,15 +8700,6 @@ function hideContext(){ $('#ctxMenu').classList.remove('open'); }
 function openApp(id, args){
   const app = APPS[id];
   if (!app){ toast('uOS', 'App not found: ' + id); return; }
-  /* web apps live in their own top-level window */
-  if (app.webApp){
-    const opened = launchWebApp(id);
-    if (opened){
-      const stub = [...windows.values()].find(w => w.appId === id);
-      if (stub) closeWin(stub);
-      return null;
-    }
-  }
   if (app.single){
     const existing = [...windows.values()].find(w => w.appId === id);
     if (existing){ restoreWin(existing); focusWin(existing); return existing; }
@@ -9203,11 +9342,29 @@ $('#palette').addEventListener('click', e => { if (e.target && e.target.id === '
    is the switcher plus add / rename / delete. Changing profile reloads so
    every app starts from that profile's data.
    ===================================================================== */
+/* Avatars are the account's first letter in a coloured circle — no emoji. */
+const AVA_COLOURS = [
+  ['#5b8cff', '#2f5fe0'], ['#8b5cf6', '#6d28d9'], ['#14b8a6', '#0f766e'],
+  ['#f59e0b', '#d97706'], ['#f43f5e', '#be123c'], ['#0ea5e9', '#0369a1']
+];
+function avatarInitial(name){
+  const t = String(name == null ? '' : name).trim();
+  return (t ? Array.from(t)[0] : 'U').toUpperCase();
+}
+function avatarCircle(name, extraClass){
+  const t = String(name == null ? '' : name).trim() || 'User';
+  let h = 0;
+  for (const ch of t) h = (h * 31 + ch.codePointAt(0)) | 0;
+  const c = AVA_COLOURS[Math.abs(h) % AVA_COLOURS.length];
+  const n = el('span', { class: 'avin' + (extraClass ? ' ' + extraClass : ''), 'aria-hidden': 'true' }, avatarInitial(t));
+  n.style.backgroundImage = 'linear-gradient(135deg,' + c[0] + ',' + c[1] + ')';
+  return n;
+}
 function profilesGet(){ try { return JSON.parse(localStorage.getItem(PROFILES_KEY)) || []; } catch(e){ return []; } }
 function profilesSet(list){ try { localStorage.setItem(PROFILES_KEY, JSON.stringify(list)); } catch(e){} }
 function currentProfile(){
   const id = store.profileId();
-  return profilesGet().find(p => p.id === id) || { id: id, name: settings.user || 'Me', avatar: settings.avatar || '🧑' };
+  return profilesGet().find(p => p.id === id) || { id: id, name: settings.user || 'Me' };
 }
 function switchProfile(id){
   if (!id || id === store.profileId()) return;
@@ -9252,16 +9409,6 @@ function profileMenu(p, e){
         if (p.id === store.profileId()){ settings.user = t; saveSettings(); }
         renderProfiles();
       } },
-    { label: 'Change picture…', act: () => {
-        const v = prompt('An emoji for this profile:', p.avatar);
-        if (v === null) return;
-        const t = Array.from(v.trim()).slice(0, 2).join(''); if (!t) return;
-        const list = profilesGet();
-        const hit = list.find(x => x.id === p.id); if (!hit) return;
-        hit.avatar = t; profilesSet(list);
-        if (p.id === store.profileId()){ settings.avatar = t; saveSettings(); }
-        renderProfiles();
-      } },
     { sep: true },
     { label: 'Delete this profile', act: () => {
         if (profilesGet().length < 2) return toast('Profiles', 'You need at least one profile');
@@ -9278,7 +9425,7 @@ function renderProfiles(){
   profilesGet().forEach(p => {
     const on = p.id === store.profileId();
     const tile = el('button', { class: 'prof-tile' + (on ? ' on' : '') },
-      el('span', { class: 'ava' }, p.avatar || '🧑'),
+      avatarCircle(p.name, 'ava'),
       el('span', { class: 'nm' }, p.name),
       el('span', { class: 'badge' }, on ? 'signed in' : ''));
     tile.onclick = () => { if (on) hideProfiles(); else switchProfile(p.id); };
@@ -9286,14 +9433,13 @@ function renderProfiles(){
     host.append(tile);
   });
   const add = el('button', { class: 'prof-tile' },
-    el('span', { class: 'ava' }, '＋'),
+    el('span', { class: 'ava add' }, '+'),
     el('span', { class: 'nm' }, 'Add a profile'));
   add.onclick = () => {
     const n = prompt('Name for the new profile:', 'New user');
     if (n === null) return;
     const t = n.trim().slice(0, 24); if (!t) return;
-    const av = prompt('An emoji for them:', '🙂') || '🙂';
-    const id = addProfile(t, Array.from(av.trim()).slice(0, 2).join('') || '🙂');
+    const id = addProfile(t, '');
     switchProfile(id);
   };
   host.append(add);
@@ -9377,7 +9523,7 @@ function renderSignIn(){
     const list = el('div', { class: 'si-list' });
     accounts.forEach(p => {
       const t = el('button', { class: 'si-tile' },
-        el('span', { class: 'si-ava' }, p.avatar || '🧑'),
+        avatarCircle(p.name, 'si-ava'),
         el('span', { class: 'si-name' }, p.name),
         el('span', { class: 'si-sub' }, p.hash ? 'password' : 'no password'));
       t.onclick = () => {
@@ -9400,7 +9546,7 @@ function renderSignIn(){
     if (!p){ siState = { mode: 'pick' }; return renderSignIn(); }
     title.textContent = 'Sign in';
     bodyEl.append(el('div', { class: 'si-who' },
-      el('span', { class: 'si-ava' }, p.avatar || '🧑'),
+      avatarCircle(p.name, 'si-ava'),
       el('span', { class: 'si-name' }, p.name)));
     const pass = el('input', { class: 'field', type: 'password', placeholder: 'Password', autocomplete: 'current-password' });
     const remember = el('input', { type: 'checkbox' });
@@ -9425,8 +9571,7 @@ function renderSignIn(){
   const name = el('input', { class: 'field', placeholder: 'Your name' });
   const pass = el('input', { class: 'field', type: 'password', placeholder: 'Password (optional)' });
   const pass2 = el('input', { class: 'field', type: 'password', placeholder: 'Repeat the password' });
-  const emoji = el('input', { class: 'field', placeholder: 'Avatar emoji (optional)', maxlength: '4' });
-  bodyEl.append(el('div', { class: 'si-form' }, name, pass, pass2, emoji),
+  bodyEl.append(el('div', { class: 'si-form' }, name, pass, pass2),
     el('div', { class: 'si-foot' }, 'Leave the password blank for an account without one — you can add it later in Settings → Users.'));
   const submit = async () => {
     msg.textContent = '';
@@ -9437,7 +9582,7 @@ function renderSignIn(){
     if (profilesGet().some(p => p.name.toLowerCase() === nm.toLowerCase())) return void (msg.textContent = 'That name is already taken.');
     const salt = pass.value ? hexRandom(16) : '';
     const hash = pass.value ? await hashPassword(pass.value, salt) : '';
-    const id = addProfile(nm, Array.from((emoji.value || '').trim()).slice(0, 2).join('') || '🧑');
+    const id = addProfile(nm, '');
     if (hash){
       const list = profilesGet();
       const rec = list.find(p => p.id === id);
