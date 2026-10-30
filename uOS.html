@@ -9228,15 +9228,14 @@ async function hashPassword(password, saltHex){
 }
 const accountById = id => profilesGet().find(p => p && p.id === id) || null;
 const protectedAccounts = () => profilesGet().filter(p => p && p.hash);
-/* is a sign-in needed before the desktop? */
+/* is a sign-in needed before the desktop? Always, unless this device has been
+   told to remember an account or to skip — passwords are optional. */
 function gateIsNeeded(){
-  const prot = protectedAccounts();
-  if (!prot.length) return false;                       // nothing protected yet
   const s = sessionGet();
-  if (!s) return true;
-  if (s.once){ sessionSet(null); return false; }        // "don't remember" was used
-  if (s.skipped) return false;
-  return !prot.some(a => a.id === s.id);
+  if (!s) return true;                          // first load, or signed out
+  if (s.once){ sessionSet(null); return false; } // "don't remember" was used
+  if (s.skipped) return false;                  // "skip for now" is remembered
+  return !accountById(s.id);                    // the remembered account must exist
 }
 function signInAs(id, remember){
   try { localStorage.setItem(ACTIVE_KEY, id); } catch(e){}
@@ -9271,7 +9270,7 @@ function renderSignIn(){
         el('span', { class: 'si-name' }, p.name),
         el('span', { class: 'si-sub' }, p.hash ? 'password' : 'no password'));
       t.onclick = () => {
-        if (p.id === store.profileId() && !p.hash){ hideSignIn(); return; }
+        if (p.id === store.profileId() && !p.hash){ sessionSet({ id: p.id }); hideSignIn(); return; }
         if (p.hash){ siState = { mode: 'pass', id: p.id }; renderSignIn(); }
         else signInAs(p.id, true);
       };
@@ -9313,23 +9312,26 @@ function renderSignIn(){
 
   title.textContent = 'Create an account';
   const name = el('input', { class: 'field', placeholder: 'Your name' });
-  const pass = el('input', { class: 'field', type: 'password', placeholder: 'Password (at least 4 characters)' });
+  const pass = el('input', { class: 'field', type: 'password', placeholder: 'Password (optional)' });
   const pass2 = el('input', { class: 'field', type: 'password', placeholder: 'Repeat the password' });
   const emoji = el('input', { class: 'field', placeholder: 'Avatar emoji (optional)', maxlength: '4' });
-  bodyEl.append(el('div', { class: 'si-form' }, name, pass, pass2, emoji));
+  bodyEl.append(el('div', { class: 'si-form' }, name, pass, pass2, emoji),
+    el('div', { class: 'si-foot' }, 'Leave the password blank for an account without one — you can add it later in Settings → Users.'));
   const submit = async () => {
     msg.textContent = '';
     const nm = name.value.trim().slice(0, 24);
     if (!nm) return void (msg.textContent = 'Give the account a name.');
-    if (pass.value.length < 4) return void (msg.textContent = 'Use at least 4 characters for the password.');
+    if (pass.value && pass.value.length < 4) return void (msg.textContent = 'Use at least 4 characters, or leave it blank for no password.');
     if (pass.value !== pass2.value) return void (msg.textContent = 'The two passwords do not match.');
     if (profilesGet().some(p => p.name.toLowerCase() === nm.toLowerCase())) return void (msg.textContent = 'That name is already taken.');
-    const salt = hexRandom(16);
-    const hash = await hashPassword(pass.value, salt);
+    const salt = pass.value ? hexRandom(16) : '';
+    const hash = pass.value ? await hashPassword(pass.value, salt) : '';
     const id = addProfile(nm, Array.from((emoji.value || '').trim()).slice(0, 2).join('') || '🧑');
-    const list = profilesGet();
-    const rec = list.find(p => p.id === id);
-    if (rec){ rec.salt = salt; rec.hash = hash; profilesSet(list); }
+    if (hash){
+      const list = profilesGet();
+      const rec = list.find(p => p.id === id);
+      if (rec){ rec.salt = salt; rec.hash = hash; profilesSet(list); }
+    }
     signInAs(id, true);
   };
   name.addEventListener('keydown', e => { if (e.key === 'Enter') pass.focus(); });
