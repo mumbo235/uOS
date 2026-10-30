@@ -173,9 +173,9 @@ button{font-family:inherit;color:inherit;cursor:pointer;border:none;background:n
   height:100%;border-radius:5px;display:flex;align-items:center;gap:9px;padding:0 12px;
   background:none;color:var(--text);transition:background .1s;position:relative;max-width:220px;
 }
-.pin{width:52px;justify-content:center;padding:0}
+.pin,.taskitem{width:52px;justify-content:center;padding:0;max-width:none}
 .pin .tico,.taskitem .tico{font-size:25px;flex:0 0 auto}
-.taskitem .tlabel{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px}
+.taskitem.running-only{opacity:.96}
 .pin:hover,.taskitem:hover{background:var(--field-hover)}
 .pin.active,.taskitem.active{background:var(--field)}
 .pin::after,.taskitem::after{content:'';position:absolute;left:50%;transform:translateX(-50%);bottom:1px;width:0;height:2.5px;border-radius:2px;background:var(--accent);transition:width .15s}
@@ -400,6 +400,7 @@ table.sheet td.sel{outline:2px solid var(--accent);outline-offset:-2px;backgroun
 .ctx{display:flex;align-items:center;gap:8px;padding:5px 10px;border-radius:5px;font-size:12px;line-height:1.25;text-align:left;width:100%}
 .ctx:hover{background:var(--field-hover)}
 .ctx.disabled{opacity:.4;pointer-events:none}
+.ctx.danger{color:#e5484d}
 .ctx .k{margin-left:auto;color:var(--text-dim);font-size:11px}
 .ctx-sep{height:1px;background:var(--border);margin:3px 4px}
 
@@ -709,8 +710,6 @@ body.tb-autohide.tb-top #taskbar:hover{transform:none}
 body.tb-center #taskbar{justify-content:center}
 body.tb-center #tray{position:absolute;right:4px;top:0;bottom:0;margin-left:0}
 body.tb-center #taskItems{flex:0 1 auto}
-body.tb-nolabels .taskitem .tlabel{display:none}
-body.tb-nolabels .taskitem{width:42px;padding:0;justify-content:center}
 body.no-desktop-icons #icons{display:none}
 /* ---- sharp corners (Personalization) ---- */
 body.square .window,body.square #startMenu,body.square #flyout,body.square #taskview,
@@ -1108,7 +1107,7 @@ migrateProfiles();
    One source of truth: publish.sh reads this constant, so tagging and the
    zip name always follow the build. Bump this when you ship.
    ===================================================================== */
-const UOS_VERSION = '3.2';
+const UOS_VERSION = '3.3';
 const UOS_REPO = 'mumbo235/uOS';
 const UOS_RELEASES = 'https://github.com/' + UOS_REPO + '/releases';
 
@@ -1325,6 +1324,9 @@ const SYS = {
   battery:  '<rect x="2.6" y="7.6" width="16.4" height="8.8" rx="2.1" fill="none" stroke="currentColor" stroke-width="1.7"/><rect x="4.6" y="9.6" width="9.4" height="4.8" rx="1" fill="currentColor"/><path d="M20.6 10.6h1.2v2.8h-1.2z" fill="currentColor"/>',
   bell:     '<path d="M6.6 10.2a5.4 5.4 0 0 1 10.8 0c0 3.9 1.4 5.3 1.4 5.3H5.2s1.4-1.4 1.4-5.3Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M10.1 18.3a2 2 0 0 0 3.8 0" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>',
   moon:     '<path d="M20 14.4A8.4 8.4 0 0 1 9.6 4 8.5 8.5 0 1 0 20 14.4Z" fill="currentColor"/>',
+  sun:      '<circle cx="12" cy="12" r="4.2" fill="currentColor"/><g stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M12 2.8v2.2M12 19v2.2M2.8 12h2.2M19 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4 17 7M7 17l-1.6 1.6"/></g>',
+  mute:     '<path d="M4 9.6h3l4-3.4v11.6l-4-3.4H4z" fill="currentColor"/><path d="m14.6 9.4 4.8 5.2M19.4 9.4l-4.8 5.2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
+  lock:     '<rect x="4.6" y="10.2" width="14.8" height="10.2" rx="2.2" fill="currentColor"/><path d="M8 10.2V7.8a4 4 0 0 1 8 0v2.4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
   sound:    '<path d="M5 9.6h2.8l3.4-3v10.8l-3.4-3H5z" fill="currentColor"/><path d="M14.4 9.4a4 4 0 0 1 0 5.2M16.8 7a7.6 7.6 0 0 1 0 10" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>',
   motion:   '<path d="M4 8h9M4 12h13M4 16h7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="18" cy="8" r="2" fill="currentColor"/>',
   image:    '<rect x="3.5" y="5" width="17" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="8.6" cy="10" r="1.7" fill="currentColor"/><path d="M5 17.6 10 12l3.2 3.4 2.4-2.6 3.9 4.8z" fill="currentColor"/>',
@@ -1373,7 +1375,7 @@ const settings = Object.assign({
   motion: true, nightLight: false, density: 'comfy', cursor: 'default',
   zoom: 100, touchMode: false,
   /* taskbar & shell */
-  tbPos: 'bottom', tbSize: 'md', iconSize: 'md', tbLabels: true, tbAutoHide: false, tbAlign: 'left',
+  tbPos: 'bottom', tbSize: 'md', iconSize: 'md', tbAutoHide: false, tbAlign: 'left',
   startRecents: true, desktopIcons: true,
   /* sound & notifications */
   sounds: true, clickSound: true, showToasts: true, dnd: false, notifSound: true,
@@ -1421,7 +1423,6 @@ function applyTheme(){
   b.toggle('high-contrast', !!settings.highContrast);
   b.toggle('tb-autohide', !!settings.tbAutoHide);
   b.toggle('tb-center', settings.tbAlign === 'center');
-  b.toggle('tb-nolabels', !settings.tbLabels);
   b.toggle('cursor-lg', settings.cursor === 'large');
   b.toggle('no-desktop-icons', !settings.desktopIcons);
   b.toggle('square', settings.round === false);
@@ -1600,7 +1601,7 @@ function restoreSession(){
   const sess = store.get('session', null);
   if (!sess || !sess.length) return;
   sess.forEach(s => {
-    if (!s || !APPS[s.appId]) return;
+    if (!s || !APPS[s.appId] || APPS[s.appId].webApp) return;
     try {
       const box = openApp(s.appId, Object.assign({}, s.args || {}, { __rect: s.rect, __desk: s.desk }));
       if (box && s.max && !box.maximized) toggleMax(box);
@@ -1958,6 +1959,8 @@ const ICONS = {
   calc:       TILE('#6473f2', `<rect x="5" y="3.2" width="14" height="17.6" rx="2.6" fill="${W}"/><rect x="7.3" y="5.6" width="9.4" height="3.6" rx="1" fill="#6473f2"/><g fill="#6473f2"><circle cx="8.4" cy="12" r="1.15"/><circle cx="12" cy="12" r="1.15"/><circle cx="15.6" cy="12" r="1.15"/><circle cx="8.4" cy="15.2" r="1.15"/><circle cx="12" cy="15.2" r="1.15"/><circle cx="15.6" cy="15.2" r="1.15"/><circle cx="8.4" cy="18.2" r="1.15"/><circle cx="12" cy="18.2" r="1.15"/><circle cx="15.6" cy="18.2" r="1.15"/></g>`),
   terminal:   TILE('#0b3d2e', `<rect x='3.4' y='5' width='17.2' height='14' rx='2.8' fill='#052e22'/><path d="M6.6 9.4l2.7 2.6-2.7 2.6" fill="none" stroke="#4ade80" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><path d="M11.6 15h4.9" stroke="#4ade80" stroke-width="1.9" stroke-linecap="round"/>`),
   settings:   TILE('#2f3b52', `<g fill="#7dd3fc"><rect x="10.65" y="2.4" width="2.7" height="3.9" rx="1.25"/><rect x="10.65" y="2.4" width="2.7" height="3.9" rx="1.25" transform="rotate(45 12 12)"/><rect x="10.65" y="2.4" width="2.7" height="3.9" rx="1.25" transform="rotate(90 12 12)"/><rect x="10.65" y="2.4" width="2.7" height="3.9" rx="1.25" transform="rotate(135 12 12)"/><rect x="10.65" y="2.4" width="2.7" height="3.9" rx="1.25" transform="rotate(180 12 12)"/><rect x="10.65" y="2.4" width="2.7" height="3.9" rx="1.25" transform="rotate(225 12 12)"/><rect x="10.65" y="2.4" width="2.7" height="3.9" rx="1.25" transform="rotate(270 12 12)"/><rect x="10.65" y="2.4" width="2.7" height="3.9" rx="1.25" transform="rotate(315 12 12)"/><circle cx="12" cy="12" r="6.7"/></g><circle cx="12" cy="12" r="3.05" fill="#2f3b52"/>`),
+  youtube:    TILE('#ff0033', `<path d="M21.1 8.3a3 3 0 0 0-2.1-2.1C17.1 5.7 12 5.7 12 5.7s-5.1 0-7 .5a3 3 0 0 0-2.1 2.1A21 21 0 0 0 2.4 12a21 21 0 0 0 .5 3.7 3 3 0 0 0 2.1 2.1c1.9.5 7 .5 7 .5s5.1 0 7-.5a3 3 0 0 0 2.1-2.1 21 21 0 0 0 .5-3.7 21 21 0 0 0-.5-3.7Z" fill="#ffffff"/><path d="M10.3 15.2V8.8l5.3 3.2-5.3 3.2Z" fill="#ff0033"/>`),
+  spotify:    TILE('#1db954', `<circle cx="12" cy="12" r="8.3" fill="#0b1410"/><g fill="none" stroke="#1db954" stroke-linecap="round"><path d="M7.5 9.3c3-1.1 6.4-.8 9 .7" stroke-width="1.85"/><path d="M8.1 12.2c2.5-.9 5.4-.6 7.7.7" stroke-width="1.6"/><path d="M8.7 15c2-.7 4.3-.5 6.2.6" stroke-width="1.35"/></g>`),
   browser:    TILE('#2aa4f4', `<circle cx="12" cy="12" r="7.6" fill="none" stroke="${W}" stroke-width="1.7"/><path d="M4.4 12h15.2M12 4.4c2.4 2.4 2.4 12.8 0 15.2M12 4.4c-2.4 2.4-2.4 12.8 0 15.2" fill="none" stroke="${W}" stroke-width="1.3" opacity=".9"/>`),
   paint:      TILE('#e84393', `<path d="M12 3.5a8.5 8.5 0 0 0 0 17c1 0 1.7-.8 1.7-1.7 0-.5-.2-.8-.5-1.1-.3-.3-.4-.6-.4-1 0-.9.7-1.6 1.6-1.6h1.9A4.2 4.2 0 0 0 20.5 11c0-4.1-3.8-7.5-8.5-7.5Z" fill="${W}"/><circle cx="8" cy="10" r="1.35" fill="#e84393"/><circle cx="12" cy="7.8" r="1.35" fill="#f6c343"/><circle cx="16" cy="10" r="1.35" fill="#4d7cfe"/>`),
   synth:      TILE('#8b5cf6', `<path d="M9.2 16.6V7.2l7.6-1.6v9" fill="none" stroke="${W}" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><circle cx="7.2" cy="17" r="2.3" fill="${W}"/><circle cx="14.8" cy="15.4" r="2.3" fill="${W}"/>`),
@@ -2572,7 +2575,6 @@ APPS.settings = {
         ),
         head('Items'),
         card(
-          row('Show window labels', sw('tbLabels'), 'Show the app name on running buttons'),
           row('Pinned apps', btnRow(
             el('button', { class: 'btn', onclick: () => { pinnedList = DEFAULT_PINS.slice(); store.set('pinned', pinnedList); rebuildTaskbar(); toast('Taskbar', 'Pins reset to defaults'); } }, 'Reset to defaults'),
             el('button', { class: 'btn', onclick: () => { pinnedList = []; store.set('pinned', []); rebuildTaskbar(); toast('Taskbar', 'All pins removed'); } }, 'Unpin everything')
@@ -4715,6 +4717,7 @@ const RUN_ALIASES = {
   taskmgr: 'taskmgr', task: 'taskmgr', clock: 'clock', calendar: 'calendar', camera: 'viewer',
   media: 'media', code: 'code', html: 'htmlview', htmlview: 'htmlview', preview: 'htmlview', webpage: 'htmlview', arcade: 'arcade', games: 'arcade', game: 'arcade', play: 'arcade', myapps: 'myapps', shelf: 'myapps', launcher: 'myapps', run: 'run', trash: 'trash', bin: 'trash', recycle: 'trash',
   clipboard: 'clipboard', sticky: 'sticky', notes: 'sticky', qr: 'qrgen', password: 'passgen', color: 'colorpicker',
+  youtube: 'youtube', yt: 'youtube', spotify: 'spotify', music: 'spotify',
   about: 'about', info: 'about', credits: 'about'
 };
 function runTarget(input){
@@ -4807,6 +4810,59 @@ function openPath(path){
   if (/\.(txt|csv|md|log)$/i.test(name) || !f.type) return openApp('notepad', { file: path });
   return openApp('notepad', { file: path });
 }
+
+/* ---------------------------- Web apps ------------------------------
+   YouTube and Spotify refuse to be embedded: YouTube sends
+   X-Frame-Options: SAMEORIGIN and Spotify's CSP is frame-ancestors 'self',
+   so an <iframe> would only ever show a blank page. A normal top-level
+   window is the only thing that works, so these apps launch their own
+   window the way an installed web app would. If the browser blocks it,
+   the card below appears with the link and a retry.                     */
+const WEB_APPS = {
+  youtube: { name: 'YouTube', icon: '\u25B6', url: 'https://www.youtube.com/',
+             w: 1180, h: 780, hint: 'Videos, music videos and live streams' },
+  spotify: { name: 'Spotify', icon: '\u266B', url: 'https://open.spotify.com/',
+             w: 1120, h: 760, hint: 'Music, podcasts and playlists' }
+};
+function launchWebApp(id){
+  const def = WEB_APPS[id];
+  if (!def) return null;
+  const left = Math.max(0, Math.round((screen.availWidth  - def.w) / 2));
+  const top  = Math.max(0, Math.round((screen.availHeight - def.h) / 2));
+  const feats = 'popup=yes,width=' + def.w + ',height=' + def.h + ',left=' + left + ',top=' + top +
+                ',menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=yes';
+  let w = null;
+  try { w = window.open(def.url, 'uos-webapp-' + id, feats); } catch(e){ w = null; }
+  if (w){ try { w.focus(); } catch(e){} }
+  return w;
+}
+Object.keys(WEB_APPS).forEach(id => {
+  const def = WEB_APPS[id];
+  APPS[id] = {
+    name: def.name, icon: def.icon, w: 470, h: 360, single: true, webApp: true,
+    mount(body, win){
+      const wrap = el('div', { style: 'padding:24px 22px;display:flex;flex-direction:column;gap:16px' });
+      wrap.append(el('div', { style: 'display:flex;gap:15px;align-items:center' },
+        el('div', { style: 'width:60px;height:60px;flex:0 0 auto;border-radius:15px;display:grid;place-items:center;background:var(--field)' },
+          el('span', { style: 'width:40px;height:40px;display:block', html: iconHTML(id, def.icon) })),
+        el('div', { style: 'min-width:0' },
+          el('div', { style: 'font-size:17px;font-weight:600' }, def.name),
+          el('div', { class: 'muted', style: 'font-size:12.5px;margin-top:2px' }, def.hint))));
+      wrap.append(el('div', { class: 'muted', style: 'font-size:12.5px;line-height:1.55' },
+        def.name + ' runs in its own window, like an installed app. This time the browser blocked that window.'));
+      const row = el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap' });
+      row.append(el('button', { class: 'btn primary', onclick: () => {
+        if (launchWebApp(id)) closeWin(win);
+        else toast('Still blocked', 'Allow pop-ups for this page, then press Open again');
+      } }, 'Open ' + def.name));
+      row.append(el('button', { class: 'btn', onclick: () => window.open(def.url, '_blank', 'noopener') }, 'New tab'));
+      row.append(el('button', { class: 'btn', onclick: async () => { if (await copyText(def.url)) toast('Copied', def.url); } }, 'Copy link'));
+      wrap.append(row);
+      wrap.append(el('div', { class: 'muted', style: 'font-size:11.5px;user-select:all' }, def.url));
+      body.append(wrap);
+    }
+  };
+});
 
 /* ---------------------------- Alt+Tab switcher ---------------------- */
 let __alt = null;
@@ -8027,7 +8083,7 @@ APPS.flashcards = {
 /* =====================================================================
    DESKTOP ICONS + START MENU
    ===================================================================== */
-const DESKTOP_ICONS = ['trash','browser','files','arcade','ai','terminal','settings','about'];
+const DESKTOP_ICONS = ['trash','browser','youtube','spotify','files','arcade','ai','terminal','settings','about'];
 
 /* Desktop shortcuts are only *shown* from this list — removing one never
    uninstalls the app, it just takes the icon off the desktop. Apps stay in
@@ -8115,10 +8171,17 @@ function renderPinned(){
   });
 }
 
+/* a running app shows as its icon only, like the pinned ones */
 function makeTaskItem(win){
-  const ti = el('button', { class: 'taskitem', title: win.app.name },
-    el('span', { class: 'tico', html: iconHTML(win.appId, win.app.icon) }),
-    el('span', { class: 'tlabel' }, win.app.name));
+  const ti = el('button', { class: 'taskitem', 'data-app': win.appId, title: win.app.name },
+    el('span', { class: 'tico', html: iconHTML(win.appId, win.app.icon) }));
+  const refresh = () => {
+    const t = $('.tb-title', win.el);
+    const extra = t && t.textContent && t.textContent !== win.app.name ? t.textContent : '';
+    ti.title = win.app.name + (extra ? ' \u2014 ' + extra : '');
+  };
+  refresh();
+  ti.addEventListener('pointerenter', refresh);
   ti.addEventListener('click', () => {
     if (win.minimized) restoreWin(win);
     else if (activeWin === win) minimizeWin(win);
@@ -8126,14 +8189,44 @@ function makeTaskItem(win){
   });
   ti.addEventListener('contextmenu', e => {
     e.preventDefault(); e.stopPropagation();
-    showContext(e.clientX, e.clientY, [
-      { label: 'Pin to taskbar', act: () => { pinApp(win.appId); toast('Taskbar', 'Pinned ' + win.app.name); } },
-      DESK_COUNT < 2 ? null : { label: 'Move to desktop…', act: () => moveMenu(win) },
+    const pinned = isPinned(win.appId);
+    const items = [
+      win.minimized
+        ? { label: 'Restore', act: () => restoreWin(win) }
+        : { label: 'Minimise', act: () => minimizeWin(win) },
+      { label: win.maximized ? 'Restore size' : 'Maximise', act: () => toggleMax(win) },
       { sep: true },
-      { label: 'Close window', act: () => closeWin(win) }
-    ]);
+      { label: 'Snap left', act: () => snapWin(win, 'left') },
+      { label: 'Snap right', act: () => snapWin(win, 'right') },
+      { sep: true },
+      pinned
+        ? { label: 'Unpin from taskbar', act: () => { unpinApp(win.appId); toast('Taskbar', 'Unpinned ' + win.app.name); } }
+        : { label: 'Pin to taskbar', act: () => { pinApp(win.appId); toast('Taskbar', 'Pinned ' + win.app.name); } },
+      win.app.single ? null : { label: 'Open another window', act: () => openApp(win.appId) },
+      DESK_COUNT < 2 ? null : { label: 'Move to desktop\u2026', act: () => moveMenu(win) },
+      { sep: true },
+      { label: 'Close window', danger: true, act: () => closeWin(win) }
+    ];
+    showContext(e.clientX, e.clientY, items);
   });
   return ti;
+}
+/* put a window on the left or right half without dragging it */
+function snapWin(win, side){
+  if (!win || !win.el) return;
+  const full = VH() - TB();
+  const half = Math.round(VW() / 2);
+  win.prevRect = { left: parseFloat(win.el.style.left) || 0, top: parseFloat(win.el.style.top) || 0,
+                   width: parseFloat(win.el.style.width) || 0, height: parseFloat(win.el.style.height) || 0 };
+  Object.assign(win.el.style, {
+    left: (side === 'left' ? 0 : half) + 'px', top: '0px',
+    width: half + 'px', height: full + 'px'
+  });
+  win.maximized = false;
+  win.el.classList.remove('maximized');
+  if (win.onResize) win.onResize();
+  rememberWin(win);
+  saveSession(true);
 }
 function attachTaskEl(win){
   if (win.taskEl && win.taskEl.classList.contains('taskitem') && !isPinned(win.appId)) return;
@@ -8439,7 +8532,7 @@ function showContext(x, y, items){
   m.innerHTML = '';
   items.filter(Boolean).forEach(it => {
     if (it.sep){ m.append(el('div', { class: 'ctx-sep' })); return; }
-    const b = el('button', { class: 'ctx' + (it.disabled ? ' disabled' : '') },
+    const b = el('button', { class: 'ctx' + (it.disabled ? ' disabled' : '') + (it.danger ? ' danger' : '') },
       it.icon ? el('span', { style: 'width:16px;display:inline-block;text-align:center' }, it.icon) : null,
       el('span', {}, it.label),
       it.key ? el('span', { class: 'k' }, it.key) : null);
@@ -8459,6 +8552,15 @@ function hideContext(){ $('#ctxMenu').classList.remove('open'); }
 function openApp(id, args){
   const app = APPS[id];
   if (!app){ toast('uOS', 'App not found: ' + id); return; }
+  /* web apps live in their own top-level window */
+  if (app.webApp){
+    const opened = launchWebApp(id);
+    if (opened){
+      const stub = [...windows.values()].find(w => w.appId === id);
+      if (stub) closeWin(stub);
+      return null;
+    }
+  }
   if (app.single){
     const existing = [...windows.values()].find(w => w.appId === id);
     if (existing){ restoreWin(existing); focusWin(existing); return existing; }
@@ -8611,7 +8713,7 @@ startClock();
 /* ---- tray flyouts -----------------------------------------------------
    The network, volume and battery tray icons each open their own panel in
    the shared #flyout popover, with live information pulled from the browser. */
-const TRAY_BTN_OF = { chevron: 'trayChevron', bell: 'trayBell', wifi: 'trayNet', vol: 'trayVol', battery: 'trayBattery' };
+const TRAY_BTN_OF = { chevron: 'trayChevron', bell: 'trayBell', wifi: 'trayNet', vol: 'trayVol', battery: 'trayBattery', qa: 'clock' };
 function closeFlyout(){
   $('#flyout').classList.remove('open');
   $$('#tray .traybtn').forEach(b => b.classList.remove('on'));
@@ -8769,6 +8871,45 @@ function flyoutBattery(f){
     f.append(b);
   });
 }
+function flyoutQuickActions(f){
+  f.append(el('div', { class: 'sect' }, 'Quick actions'));
+  const qa = el('div', { class: 'qa' });
+  const ACTIONS = [
+    ['moon', 'Dark mode', () => settings.theme === 'dark', () => { settings.theme = settings.theme === 'dark' ? 'light' : 'dark'; saveSettings(); }],
+    ['sun', 'Night light', () => !!settings.nightLight, () => { settings.nightLight = !settings.nightLight; saveSettings(); }],
+    ['mute', 'Mute', () => !!settings.muted, () => { settings.muted = !settings.muted; saveSettings(); applyVolumes(); }],
+    ['image', 'Wallpaper', null, () => { settings.wallpaper = (settings.wallpaper + 1) % WALLPAPERS.length; settings.customWall = null; saveSettings(); }],
+    ['sound', 'Sounds', () => settings.sounds, () => { settings.sounds = !settings.sounds; saveSettings(); }],
+    ['motion', 'Motion', () => settings.motion, () => { settings.motion = !settings.motion; saveSettings(); }],
+    ['lock', 'Lock', null, () => { closeFlyout(); lockScreen(); }],
+    ['chart', 'Task Mgr', null, () => { closeFlyout(); openApp('taskmgr'); }],
+    ['gear', 'Settings', null, () => { closeFlyout(); openApp('settings'); }]
+  ];
+  ACTIONS.forEach(([ic, label, isOn, act]) => {
+    const b = el('button', { class: isOn ? (isOn() ? 'on' : '') : '' });
+    b.innerHTML = sysIcon(ic) + '<span>' + label + '</span>';
+    b.onclick = () => { act(); if (isOn) b.classList.toggle('on', isOn()); };
+    qa.append(b);
+  });
+  f.append(qa);
+}
+function flyoutNotifications(f){
+  f.append(el('div', { class: 'sect' }, 'Notifications'));
+  if (!notifications.length) f.append(el('div', { class: 'muted', style: 'font-size:12px' }, 'No new notifications'));
+  else notifications.slice(0, 6).forEach(n => {
+    f.append(el('div', { class: 'notif' },
+      el('span', { class: 'tico', html: iconHTML('settings', '\u{1F514}') }),
+      el('div', { style: 'min-width:0' }, el('b', { style: 'font-size:12px' }, n.title),
+        el('div', { class: 'muted', style: 'font-size:11.5px' }, n.msg || ''))));
+    const acts = (n.actions || []).filter(Boolean).slice(0, 3);
+    if (acts.length){
+      const row = el('div', { class: 'toast-actions', style: 'margin:2px 0 6px 26px' });
+      acts.forEach(a => row.append(el('button', { class: 'btn', onclick: () => { try { a.act && a.act(); } catch(e){} closeFlyout(); } }, a.label)));
+      f.append(row);
+    }
+  });
+  f.append(el('button', { class: 'btn', onclick: () => { notifications = []; closeFlyout(); openFlyout('bell'); } }, 'Clear all'));
+}
 function renderFlyout(kind){
   const f = $('#flyout');
   f.dataset.kind = kind;
@@ -8776,10 +8917,11 @@ function renderFlyout(kind){
   if (kind === 'wifi') flyoutWifi(f);
   else if (kind === 'vol') flyoutVol(f);
   else if (kind === 'battery') flyoutBattery(f);
+  else if (kind === 'qa') flyoutQuickActions(f);
   else if (kind === 'chevron'){
     f.append(el('div', { class: 'sect' }, 'Hidden icons'));
     const row = el('div', { style: 'display:flex;gap:10px;flex-wrap:wrap' });
-    [['uos','uOS','uOS 2.0 — running'],
+    [['uos','uOS','uOS 2.0 \u2014 running'],
      ['clipboard','Clipboard','Nothing copied yet'],
      ['shield','Security','Your data never leaves this browser'],
      ['update','Updates','uOS is up to date']].forEach(([ic, label, msg]) => {
@@ -8788,40 +8930,8 @@ function renderFlyout(kind){
       row.append(b);
     });
     f.append(row);
-  } else {
-    f.append(el('div', { class: 'sect' }, 'Quick actions'));
-    const qa = el('div', { class: 'qa' });
-    const ACTIONS = [
-      ['moon','Dark mode', () => settings.theme === 'dark', () => { settings.theme = settings.theme === 'dark' ? 'light' : 'dark'; saveSettings(); }],
-      ['sound','Sounds', () => settings.sounds, () => { settings.sounds = !settings.sounds; saveSettings(); }],
-      ['motion','Motion', () => settings.motion, () => { settings.motion = !settings.motion; saveSettings(); }],
-      ['image','Wallpaper', null, () => { settings.wallpaper = (settings.wallpaper + 1) % WALLPAPERS.length; settings.customWall = null; saveSettings(); }],
-      ['chart','Task Mgr', null, () => openApp('taskmgr')],
-      ['gear','Settings', null, () => openApp('settings')]
-    ];
-    ACTIONS.forEach(([ic, label, isOn, act]) => {
-      const b = el('button', { class: isOn && isOn() ? 'on' : '' });
-      b.innerHTML = sysIcon(ic) + '<span>' + label + '</span>';
-      b.onclick = () => { act(); if (isOn) b.classList.toggle('on', isOn()); };
-      qa.append(b);
-    });
-    f.append(qa);
-    f.append(el('div', { class: 'sect' }, 'Notifications'));
-    if (!notifications.length) f.append(el('div', { class: 'muted', style: 'font-size:12px' }, 'No new notifications'));
-    else notifications.slice(0, 6).forEach(n => {
-      f.append(el('div', { class: 'notif' },
-        el('span', { class: 'tico', html: iconHTML('settings', '🔔') }),
-        el('div', { style: 'min-width:0' }, el('b', { style: 'font-size:12px' }, n.title),
-          el('div', { class: 'muted', style: 'font-size:11.5px' }, n.msg || ''))));
-      const acts = (n.actions || []).filter(Boolean).slice(0, 3);
-      if (acts.length){
-        const row = el('div', { class: 'toast-actions', style: 'margin:2px 0 6px 26px' });
-        acts.forEach(a => row.append(el('button', { class: 'btn', onclick: () => { try { a.act && a.act(); } catch(e){} closeFlyout(); } }, a.label)));
-        f.append(row);
-      }
-    });
-    f.append(el('button', { class: 'btn', onclick: () => { notifications = []; closeFlyout(); openFlyout('bell'); } }, 'Clear all'));
   }
+  else { flyoutQuickActions(f); flyoutNotifications(f); }
   const tb = TRAY_BTN_OF[kind] ? $('#' + TRAY_BTN_OF[kind]) : null;
   $$('#tray .traybtn').forEach(b => b.classList.remove('on'));
   if (tb) tb.classList.add('on');
@@ -8835,6 +8945,7 @@ function openFlyout(kind){
 $('#trayChevron').onclick = () => openFlyout('chevron');
 $('#trayBell').onclick = () => openFlyout('bell');
 $('#trayNet').onclick = () => openFlyout('wifi');
+$('#clock').onclick = () => openFlyout('qa');      // time -> quick actions
 $('#trayVol').onclick = () => openFlyout('vol');
 $('#trayBattery').onclick = () => openFlyout('battery');
 

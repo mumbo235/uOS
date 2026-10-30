@@ -1,4 +1,33 @@
-# uOS 3.2
+# uOS 3.3
+
+**made by jarvo and deepseek**
+
+A desktop-style operating system that lives in a single HTML file. No build step, no
+dependencies, no installs, no accounts — just open it.
+
+## New in 3.3
+
+- **The clock opens Quick actions.** Click the time in the tray for a compact panel:
+  Dark mode, Night light, Mute, Wallpaper, Sounds, Motion, Lock, Task Manager and
+  Settings. The bell next to it still opens the full Action Center with notifications.
+- **Icon-only taskbar.** Running apps now show as just their icon — the same size as the
+  pinned ones, instead of a wide labelled button. Hover for the window's full title.
+- **A real window menu.** Right-click any taskbar button: Restore / Minimise, Maximise or
+  Restore size, Snap left, Snap right, Pin or unpin, Open another window, Move to
+  desktop, and Close (in red).
+- **YouTube and Spotify are web apps, not browser tabs.** Both have their own icon on the
+  desktop (and in the Start menu, search and Run) and open in their own app window with no
+  tabs and no address bar. Both sites refuse to be embedded in a page, so they run as
+  separate windows; if your browser blocks that window, uOS shows a card with the link,
+  a retry and a copy button instead of a blank frame.
+- **The sign-in screen appears on every start** — pick an account, sign in (password
+  optional), tick *Remember this device*, or skip.
+- **Fixed, honest AI limits.** The assistant's 20/minute and 100/day caps are baked in and
+  can't be raised in Settings, and its cloud service is always on rather than a switch you
+  could accidentally leave off.
+- **One desktop for now**, and dropdowns that are finally readable in dark themes.
+
+---
 
 **made by jarvo and deepseek**
 
@@ -63,7 +92,8 @@ dependencies, no installs, no accounts — just open it.
 
 ## Highlights
 
-- **33 apps** — Files, Notepad, Calculator, Terminal, Settings, Nova Browser, Paint,
+- **35 apps** — Files, Notepad, Calculator, Terminal, Settings, Nova Browser, **YouTube**,
+  **Spotify**, Paint,
   Music Studio, Clock/Timer, Task Manager, Colour Picker, QR Code, Password Generator,
   Calendar, Sticky Notes, Media Player, Code Editor, **HTML Viewer**, **My Apps**,
   **Arcade**, **Sheets**, **Text Tools**, **System Info**, **Colour Studio**,
