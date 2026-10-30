@@ -1,11 +1,21 @@
-# uOS 3.3
+# uOS 3.4
 
 **made by jarvo and deepseek**
 
 A desktop-style operating system that lives in a single HTML file. No build step, no
 dependencies, no installs, no accounts — just open it.
 
-## New in 3.3
+## New in 3.4
+
+- **Stixman.** A new app with one job: get out of his window and wreck the desktop. He
+  sprints after windows and punches them until they crack and rattle, boots desktop icons
+  into the air, hurls rocks across the screen and stomps so hard the whole desktop jumps.
+  Open him and one is already loose — **Add one** sends up to eight, **Rampage** keeps the
+  screen shaking for six seconds, **Put him away** tidies everything up.
+  Nothing is really damaged: every crack is an overlay that fades, every wobble is a
+  temporary animation, and closing the app puts the desktop back exactly as it was.
+
+## What was new in 3.3
 
 - **The clock opens Quick actions.** Click the time in the tray for a compact panel:
   Dark mode, Night light, Mute, Wallpaper, Sounds, Motion, Lock, Task Manager and
@@ -98,8 +108,8 @@ dependencies, no installs, no accounts — just open it.
 
 ## Highlights
 
-- **35 apps** — Files, Notepad, Calculator, Terminal, Settings, Nova Browser, **YouTube**,
-  **Spotify**, Paint,
+- **36 apps** — Files, Notepad, Calculator, Terminal, Settings, Nova Browser, **YouTube**,
+  **Spotify**, **Stixman**, Paint,
   Music Studio, Clock/Timer, Task Manager, Colour Picker, QR Code, Password Generator,
   Calendar, Sticky Notes, Media Player, Code Editor, **HTML Viewer**, **My Apps**,
   **Arcade**, **Sheets**, **Text Tools**, **System Info**, **Colour Studio**,

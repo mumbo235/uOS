@@ -871,6 +871,43 @@ body.cursor-lg,body.cursor-lg *{
 .mad-stage .mad-empty{align-self:center;justify-self:center}
 .mad-empty{padding:26px 20px;text-align:center;color:var(--text-dim);font-size:12.5px;line-height:1.6}
 .mad-note{display:flex;align-items:center;gap:10px;padding:8px 12px;font-size:11.5px;line-height:1.45;background:rgba(255,176,32,.14);border-bottom:1px solid var(--border);color:var(--text)}
+
+/* ---------- Stixman: the chaos layer ---------- */
+.chaos-canvas{position:absolute;inset:0;z-index:560;pointer-events:none}
+.chaos-hit{animation:chaosHit .55s cubic-bezier(.36,.07,.19,.97)}
+@keyframes chaosHit{
+  0%,100%{transform:translate(0,0) rotate(0)}
+  12%{transform:translate(-7px,3px) rotate(-.5deg)}
+  28%{transform:translate(6px,-4px) rotate(.6deg)}
+  45%{transform:translate(-5px,2px) rotate(-.4deg)}
+  62%{transform:translate(4px,-2px) rotate(.3deg)}
+  80%{transform:translate(-2px,1px) rotate(-.2deg)}
+}
+.chaos-kick{animation:chaosKick .85s cubic-bezier(.2,1.3,.35,1)}
+@keyframes chaosKick{
+  0%{transform:translate(0,0) rotate(0)}
+  30%{transform:translate(var(--kx,60px),var(--ky,-40px)) rotate(26deg)}
+  55%{transform:translate(calc(var(--kx,60px) * .5),calc(var(--ky,-40px) * -.2)) rotate(10deg)}
+  100%{transform:translate(0,0) rotate(0)}
+}
+.chaos-quake{animation:chaosQuake .5s ease-in-out}
+@keyframes chaosQuake{
+  0%,100%{transform:translate(0,0)}
+  20%{transform:translate(-4px,3px)}
+  40%{transform:translate(4px,-3px)}
+  60%{transform:translate(-3px,-2px)}
+  80%{transform:translate(2px,2px)}
+}
+.chaos-crack{position:absolute;pointer-events:none;z-index:60;overflow:hidden;opacity:.95;will-change:opacity}
+.chaos-crack svg{width:100%;height:100%;display:block}
+.stix{display:flex;flex-direction:column;gap:12px;padding:16px;height:100%;box-sizing:border-box;overflow:auto}
+.stix-art{display:flex;align-items:center;justify-content:center;background:linear-gradient(150deg,#2b1a16,#141018);border:1px solid var(--border);border-radius:12px;padding:12px}
+.stix-art svg{width:78px;height:78px;display:block}
+.stix h3{margin:0;font-size:16px}
+.stix p{margin:0;font-size:12.5px;line-height:1.55;color:var(--text-dim)}
+.stix-row{display:flex;gap:8px;flex-wrap:wrap}
+.stix-stats{margin-top:auto;display:flex;gap:16px;font-size:11.5px;color:var(--text-dim);font-variant-numeric:tabular-nums}
+.stix-stats b{color:var(--text);font-weight:600}
 </style>
 </head>
 <body>
@@ -1131,7 +1168,7 @@ migrateProfiles();
    One source of truth: publish.sh reads this constant, so tagging and the
    zip name always follow the build. Bump this when you ship.
    ===================================================================== */
-const UOS_VERSION = '3.3';
+const UOS_VERSION = '3.4';
 const UOS_REPO = 'mumbo235/uOS';
 const UOS_RELEASES = 'https://github.com/' + UOS_REPO + '/releases';
 
@@ -1982,6 +2019,7 @@ const ICONS = {
   calc:       TILE('#6473f2', `<rect x="5" y="3.2" width="14" height="17.6" rx="2.6" fill="${W}"/><rect x="7.3" y="5.6" width="9.4" height="3.6" rx="1" fill="#6473f2"/><g fill="#6473f2"><circle cx="8.4" cy="12" r="1.15"/><circle cx="12" cy="12" r="1.15"/><circle cx="15.6" cy="12" r="1.15"/><circle cx="8.4" cy="15.2" r="1.15"/><circle cx="12" cy="15.2" r="1.15"/><circle cx="15.6" cy="15.2" r="1.15"/><circle cx="8.4" cy="18.2" r="1.15"/><circle cx="12" cy="18.2" r="1.15"/><circle cx="15.6" cy="18.2" r="1.15"/></g>`),
   terminal:   TILE('#0b3d2e', `<rect x='3.4' y='5' width='17.2' height='14' rx='2.8' fill='#052e22'/><path d="M6.6 9.4l2.7 2.6-2.7 2.6" fill="none" stroke="#4ade80" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><path d="M11.6 15h4.9" stroke="#4ade80" stroke-width="1.9" stroke-linecap="round"/>`),
   settings:   TILE('#2f3b52', `<g fill="#7dd3fc"><rect x="10.65" y="2.4" width="2.7" height="3.9" rx="1.25"/><rect x="10.65" y="2.4" width="2.7" height="3.9" rx="1.25" transform="rotate(45 12 12)"/><rect x="10.65" y="2.4" width="2.7" height="3.9" rx="1.25" transform="rotate(90 12 12)"/><rect x="10.65" y="2.4" width="2.7" height="3.9" rx="1.25" transform="rotate(135 12 12)"/><rect x="10.65" y="2.4" width="2.7" height="3.9" rx="1.25" transform="rotate(180 12 12)"/><rect x="10.65" y="2.4" width="2.7" height="3.9" rx="1.25" transform="rotate(225 12 12)"/><rect x="10.65" y="2.4" width="2.7" height="3.9" rx="1.25" transform="rotate(270 12 12)"/><rect x="10.65" y="2.4" width="2.7" height="3.9" rx="1.25" transform="rotate(315 12 12)"/><circle cx="12" cy="12" r="6.7"/></g><circle cx="12" cy="12" r="3.05" fill="#2f3b52"/>`),
+  stixman:    TILE('#ff5b3c', `<g stroke="#ffffff" stroke-width="1.9" stroke-linecap="round" fill="none"><circle cx="12" cy="7.4" r="2.5" fill="#ffffff" stroke="none"/><path d="M12 10v5.4M12 11.6 8.6 14.5M12 11.6 15.4 14.5M12 15.4 9.5 19.9M12 15.4 14.5 19.9"/></g>`),
   youtube:    TILE('#ff0033', `<path d="M21.1 8.3a3 3 0 0 0-2.1-2.1C17.1 5.7 12 5.7 12 5.7s-5.1 0-7 .5a3 3 0 0 0-2.1 2.1A21 21 0 0 0 2.4 12a21 21 0 0 0 .5 3.7 3 3 0 0 0 2.1 2.1c1.9.5 7 .5 7 .5s5.1 0 7-.5a3 3 0 0 0 2.1-2.1 21 21 0 0 0 .5-3.7 21 21 0 0 0-.5-3.7Z" fill="#ffffff"/><path d="M10.3 15.2V8.8l5.3 3.2-5.3 3.2Z" fill="#ff0033"/>`),
   spotify:    TILE('#1db954', `<circle cx="12" cy="12" r="8.3" fill="#0b1410"/><g fill="none" stroke="#1db954" stroke-linecap="round"><path d="M7.5 9.3c3-1.1 6.4-.8 9 .7" stroke-width="1.85"/><path d="M8.1 12.2c2.5-.9 5.4-.6 7.7.7" stroke-width="1.6"/><path d="M8.7 15c2-.7 4.3-.5 6.2.6" stroke-width="1.35"/></g>`),
   browser:    TILE('#2aa4f4', `<circle cx="12" cy="12" r="7.6" fill="none" stroke="${W}" stroke-width="1.7"/><path d="M4.4 12h15.2M12 4.4c2.4 2.4 2.4 12.8 0 15.2M12 4.4c-2.4 2.4-2.4 12.8 0 15.2" fill="none" stroke="${W}" stroke-width="1.3" opacity=".9"/>`),
@@ -4729,6 +4767,7 @@ const RUN_ALIASES = {
   media: 'media', code: 'code', html: 'htmlview', htmlview: 'htmlview', preview: 'htmlview', webpage: 'htmlview', arcade: 'arcade', games: 'arcade', game: 'arcade', play: 'arcade', myapps: 'myapps', shelf: 'myapps', launcher: 'myapps', run: 'run', trash: 'trash', bin: 'trash', recycle: 'trash',
   clipboard: 'clipboard', sticky: 'sticky', notes: 'sticky', qr: 'qrgen', password: 'passgen', color: 'colorpicker',
   youtube: 'youtube', yt: 'youtube', spotify: 'spotify', music: 'spotify',
+  stixman: 'stixman', stickman: 'stixman', stick: 'stixman', chaos: 'stixman', stix: 'stixman',
   about: 'about', info: 'about', credits: 'about'
 };
 function runTarget(input){
@@ -5011,6 +5050,515 @@ Object.keys(MEDIA_APPS).forEach(id => {
     }
   };
 });
+
+/* ------------------------------ Stixman -----------------------------
+   A stickman who gets out of his window and wrecks the desktop: he runs
+   at windows and punches them, boots desktop icons into the air, hurls
+   rocks and stomps so hard the screen jumps. Everything he does is a
+   temporary CSS class, an SVG crack or a canvas particle, so nothing is
+   really damaged — close the app (or press Put him away) and the desktop
+   is exactly as it was.                                              */
+let chaosCanvas = null, chaosCtx = null, chaosRaf = 0, chaosMen = [], chaosParts = [],
+    chaosHits = 0, chaosLast = 0, chaosRampageUntil = 0;
+const CHAOS_QUIPS = ['BONK!', 'OOF', 'YEET', 'SMASH', 'HIIIYA', 'oops', 'CHAOS', 'WHEE',
+                     'KAPOW', 'nyoom', 'sorry!', 'TIMBER', 'BONK', 'yah!'];
+const chaosRand = (a, b) => a + Math.random() * (b - a);
+const chaosPick = a => a[Math.floor(Math.random() * a.length)];
+const chaosDeskEl = () => document.getElementById('desktop');
+
+function chaosInit(){
+  const desk = chaosDeskEl();
+  if (!desk) return false;
+  if (!chaosCanvas || !chaosCanvas.isConnected){
+    chaosCanvas = document.createElement('canvas');
+    chaosCanvas.className = 'chaos-canvas';
+    desk.append(chaosCanvas);
+    chaosCtx = chaosCanvas.getContext('2d');
+    window.addEventListener('resize', chaosResize);
+  }
+  chaosResize();
+  return true;
+}
+function chaosResize(){
+  if (!chaosCanvas || !chaosCtx) return;
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const r = chaosCanvas.getBoundingClientRect();
+  chaosCanvas.width  = Math.max(1, Math.round(r.width  * dpr));
+  chaosCanvas.height = Math.max(1, Math.round(r.height * dpr));
+  chaosCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+function chaosSound(kind){
+  if (!settings.sounds || settings.muted) return;
+  try {
+    __ac = __ac || new (window.AudioContext || window.webkitAudioContext)();
+    if (__ac.state === 'suspended') __ac.resume();
+    const t0 = __ac.currentTime;
+    if (kind === 'crash' || kind === 'throw'){
+      const len = Math.floor(__ac.sampleRate * (kind === 'crash' ? 0.2 : 0.11));
+      const buf = __ac.createBuffer(1, len, __ac.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3);
+      const src = __ac.createBufferSource(); src.buffer = buf;
+      const flt = __ac.createBiquadFilter();
+      flt.type = 'bandpass';
+      flt.frequency.value = kind === 'crash' ? 1500 : 2700;
+      flt.Q.value = 0.8;
+      const g = __ac.createGain(); g.gain.value = kind === 'crash' ? 0.16 : 0.08;
+      src.connect(flt).connect(g).connect(__ac.destination);
+      src.start(t0);
+    } else {
+      const o = __ac.createOscillator(), g = __ac.createGain();
+      o.type = 'square';
+      o.frequency.setValueAtTime(200, t0);
+      o.frequency.exponentialRampToValueAtTime(70, t0 + 0.11);
+      g.gain.setValueAtTime(0.05, t0);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.13);
+      o.connect(g).connect(__ac.destination);
+      o.start(t0); o.stop(t0 + 0.14);
+    }
+  } catch(e){}
+}
+
+/* ---------- what he can hit ---------- */
+function chaosTargets(){
+  const out = [];
+  windows.forEach(w => {
+    if (w.minimized || !w.el || !w.el.isConnected) return;
+    const r = w.el.getBoundingClientRect();
+    if (r.width < 60 || r.height < 60) return;
+    out.push({
+      el: w.el, kind: 'win',
+      x: r.left + chaosRand(r.width * 0.18, r.width * 0.82),
+      y: r.top + chaosRand(28, Math.min(r.height - 12, 200))
+    });
+  });
+  document.querySelectorAll('#icons .dicon').forEach(n => {
+    const r = n.getBoundingClientRect();
+    if (r.width > 10 && r.height > 10){
+      out.push({ el: n, kind: 'icon', x: r.left + r.width / 2, y: r.top + r.height * 0.4 });
+    }
+  });
+  return out;
+}
+
+/* ---------- the damage ---------- */
+function chaosCrack(el, x, y){
+  if (!el || el.querySelector(':scope > .chaos-crack')) return;
+  const d = document.createElement('div');
+  d.className = 'chaos-crack';
+  const cr = chaosCanvas ? chaosCanvas.getBoundingClientRect() : { left: 0, top: 0 };
+  const r = el.getBoundingClientRect();
+  const cw = 250, ch = 175;
+  let lx = (x == null ? r.width / 2 : x + cr.left - r.left);
+  let ly = (y == null ? r.height / 2 : y + cr.top - r.top);
+  lx = Math.max(6, Math.min(r.width - cw * 0.35, lx - cw / 2));
+  ly = Math.max(6, Math.min(r.height - ch * 0.35, ly - ch / 2));
+  d.style.width = cw + 'px';
+  d.style.height = ch + 'px';
+  d.style.left = lx + 'px';
+  d.style.top = ly + 'px';
+  d.innerHTML =
+    '<svg viewBox="0 0 220 150" preserveAspectRatio="none">' +
+    '<g fill="none" stroke="#fff" stroke-opacity=".5" stroke-width="1.3" stroke-linecap="round">' +
+    '<path d="M110 0 L106 22 L114 34 L102 52 L110 66 L98 88 L106 108 L100 131 L104 150"/>' +
+    '<path d="M106 22 L82 15 L68 25 L50 18"/><path d="M114 34 L138 26 L150 34 L170 27"/>' +
+    '<path d="M102 52 L76 57 L62 70 L44 64"/><path d="M110 66 L136 61 L152 72 L172 66"/>' +
+    '<path d="M98 88 L74 92 L60 104 L42 98"/><path d="M106 108 L130 104 L146 114"/>' +
+    '</g><g fill="none" stroke="#000" stroke-opacity=".32" stroke-width="2.6" stroke-linecap="round">' +
+    '<path d="M110 0 L106 22 L114 34 L102 52 L110 66 L98 88 L106 108 L100 131 L104 150"/></g></svg>';
+  el.append(d);
+  setTimeout(() => d.remove(), 3400);
+}
+function chaosPunch(el, x, y){
+  if (!el || !el.isConnected) return;
+  el.classList.remove('chaos-hit');
+  void el.offsetWidth;
+  el.classList.add('chaos-hit');
+  setTimeout(() => el.classList.remove('chaos-hit'), 620);
+  chaosCrack(el, x, y);
+  chaosBurst(x, y, 16, '#ffd48a');
+  chaosSound('crash');
+  chaosHits++;
+}
+function chaosBoot(el, x, y){
+  if (!el || !el.isConnected) return;
+  el.style.setProperty('--kx', chaosRand(-130, 130).toFixed(0) + 'px');
+  el.style.setProperty('--ky', (-40 - Math.random() * 70).toFixed(0) + 'px');
+  el.classList.remove('chaos-kick');
+  void el.offsetWidth;
+  el.classList.add('chaos-kick');
+  setTimeout(() => {
+    el.classList.remove('chaos-kick');
+    el.style.removeProperty('--kx');
+    el.style.removeProperty('--ky');
+  }, 900);
+  chaosBurst(x, y, 10, '#9fd0ff');
+  chaosSound('bonk');
+  chaosHits++;
+}
+function chaosQuake(){
+  const d = chaosDeskEl();
+  if (!d) return;
+  d.classList.remove('chaos-quake');
+  void d.offsetWidth;
+  d.classList.add('chaos-quake');
+  setTimeout(() => d.classList.remove('chaos-quake'), 560);
+  chaosSound('crash');
+}
+function chaosBurst(x, y, n, color){
+  for (let i = 0; i < n; i++){
+    const a = Math.random() * Math.PI * 2, sp = chaosRand(70, 330);
+    chaosParts.push({
+      kind: 'bit', x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 70,
+      life: 0, max: chaosRand(0.35, 0.85), color, size: chaosRand(1.5, 4)
+    });
+  }
+}
+
+/* ---------- the man ---------- */
+function chaosSpawn(n){
+  if (!chaosInit()) return 0;
+  const W = chaosCanvas.clientWidth || 800, H = chaosCanvas.clientHeight || 600;
+  let added = 0;
+  for (let i = 0; i < (n || 1); i++){
+    if (chaosMen.length >= 8) break;
+    chaosMen.push({
+      x: chaosRand(60, Math.max(80, W - 60)),
+      y: chaosRand(90, Math.max(120, H - 40)),
+      tx: null, ty: null, target: null,
+      state: 'run', act: 0, face: Math.random() < 0.5 ? -1 : 1,
+      t: Math.random() * 6, think: chaosRand(0.1, 0.8),
+      speed: chaosRand(210, 330), scale: chaosRand(0.85, 1.16),
+      say: '', sayT: 0
+    });
+    added++;
+  }
+  chaosStart();
+  return added;
+}
+function chaosStart(){
+  if (chaosRaf) return;
+  chaosLast = performance.now();
+  const frame = now => {
+    const dt = Math.min(0.05, (now - chaosLast) / 1000);
+    chaosLast = now;
+    chaosTick(dt);
+    chaosDraw();
+    if (chaosMen.length || chaosParts.length || Date.now() < chaosRampageUntil){
+      chaosRaf = requestAnimationFrame(frame);
+    } else {
+      chaosRaf = 0;
+    }
+  };
+  chaosRaf = requestAnimationFrame(frame);
+}
+function chaosAct(m){
+  const t = m.target;
+  if (!t || !t.el || !t.el.isConnected){ m.target = null; m.tx = null; return; }
+  const cr = chaosCanvas.getBoundingClientRect();
+  if (t.kind === 'win'){
+    m.state = 'punch'; m.act = 0.42;
+    chaosPunch(t.el, m.x, m.y - 40);
+  } else {
+    m.state = 'kick'; m.act = 0.42;
+    chaosBoot(t.el, m.x, m.y - 18);
+  }
+  m.say = chaosPick(CHAOS_QUIPS);
+  m.sayT = 1.1;
+  m.target = null; m.tx = null; m.think = chaosRand(0.15, 0.6);
+  if (Math.random() < 0.3 && chaosParts.length < 80) chaosThrow(m, cr);
+}
+function chaosThrow(m, cr){
+  const list = chaosTargets();
+  if (!list.length) return;
+  const t = chaosPick(list);
+  chaosParts.push({
+    kind: 'rock', x: m.x + m.face * 8, y: m.y - 48 * m.scale,
+    tx: t.x - cr.left, ty: t.y - cr.top, sx: m.x + m.face * 8, sy: m.y - 48 * m.scale,
+    p: 0, dur: chaosRand(0.45, 0.7), el: t.el, tkind: t.kind
+  });
+  chaosSound('throw');
+}
+function chaosTick(dt){
+  const W = chaosCanvas.clientWidth || innerWidth;
+  const H = chaosCanvas.clientHeight || innerHeight;
+  const cr = chaosCanvas.getBoundingClientRect();
+
+  if (Date.now() < chaosRampageUntil && Math.random() < dt * 1.6 && chaosParts.length < 60){
+    chaosQuake();
+  }
+  chaosMen.forEach(m => {
+    m.t += dt;
+    if (m.sayT > 0) m.sayT -= dt;
+    if (m.act > 0){
+      m.act -= dt;
+      if (m.act <= 0) m.state = 'run';
+    }
+    if (m.state === 'run'){
+      m.think -= dt;
+      if (!m.target || m.think <= 0 || !m.target.el.isConnected){
+        const list = chaosTargets();
+        m.target = list.length ? chaosPick(list) : null;
+        if (m.target){
+          m.tx = m.target.x - cr.left;
+          m.ty = m.target.y - cr.top;
+        }
+        m.think = chaosRand(1.1, 3.2);
+      }
+      if (m.tx != null){
+        const dx = m.tx - m.x, dy = m.ty - m.y;
+        const d = Math.hypot(dx, dy) || 1;
+        m.face = dx >= 0 ? 1 : -1;
+        if (d < 44) chaosAct(m);
+        else {
+          m.x += dx / d * m.speed * dt;
+          m.y += dy / d * m.speed * dt;
+        }
+      } else if (Math.random() < dt * 0.5){
+        m.face = Math.random() < 0.5 ? -1 : 1;
+      }
+    }
+    m.x = Math.max(26, Math.min(W - 26, m.x));
+    m.y = Math.max(64, Math.min(H - 12, m.y));
+  });
+
+  for (let i = chaosParts.length - 1; i >= 0; i--){
+    const p = chaosParts[i];
+    if (p.kind === 'rock'){
+      p.p += dt / p.dur;
+      const e = Math.min(1, p.p);
+      p.x = p.sx + (p.tx - p.sx) * e;
+      p.y = p.sy + (p.ty - p.sy) * e - Math.sin(e * Math.PI) * 90;
+      if (e >= 1){
+        chaosParts.splice(i, 1);
+        if (p.el && p.el.isConnected){
+          if (p.tkind === 'win') chaosPunch(p.el, p.x, p.y);
+          else chaosBoot(p.el, p.x, p.y);
+          chaosQuake();
+        } else chaosBurst(p.x, p.y, 8, '#ffd48a');
+      }
+      continue;
+    }
+    p.life += dt;
+    p.vy += 900 * dt;
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    p.vx *= 0.99;
+    if (p.life >= p.max) chaosParts.splice(i, 1);
+  }
+}
+
+/* ---------- drawing ---------- */
+function chaosDraw(){
+  if (!chaosCtx) return;
+  const W = chaosCanvas.clientWidth, H = chaosCanvas.clientHeight;
+  chaosCtx.clearRect(0, 0, W, H);
+
+  chaosParts.forEach(p => {
+    const a = p.kind === 'rock' ? 1 : Math.max(0, 1 - p.life / p.max);
+    chaosCtx.globalAlpha = a;
+    if (p.kind === 'rock'){
+      chaosCtx.fillStyle = '#2b2f3a';
+      chaosCtx.beginPath();
+      chaosCtx.arc(p.x, p.y, 5, 0, Math.PI * 2);
+      chaosCtx.fill();
+      chaosCtx.strokeStyle = '#fff';
+      chaosCtx.lineWidth = 1.4;
+      chaosCtx.stroke();
+    } else {
+      chaosCtx.fillStyle = p.color;
+      chaosCtx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
+    }
+  });
+  chaosCtx.globalAlpha = 1;
+
+  chaosMen.forEach(m => chaosDrawMan(chaosCtx, m));
+}
+function chaosDrawMan(g, m){
+  const s = m.scale;
+  const running = m.state === 'run';
+  const ph = m.t * (running ? 12 : 7);
+  const stride = Math.sin(ph) * (running ? 11 : 0) * s;
+  const armSwing = Math.sin(ph + Math.PI) * (running ? 8 : 0) * s;
+  const bob = running ? Math.abs(Math.sin(ph)) * 1.8 * s : 0;
+  const hipY = -26 * s, shY = -50 * s, headY = -60 * s, headR = 8.4 * s;
+
+  g.save();
+  g.translate(m.x, m.y - bob);
+  g.scale(m.face, 1);
+
+  /* shadow */
+  g.globalAlpha = 0.18;
+  g.fillStyle = '#000';
+  g.beginPath();
+  g.ellipse(0, 2, 17 * s, 4 * s, 0, 0, Math.PI * 2);
+  g.fill();
+  g.globalAlpha = 1;
+
+  g.lineCap = 'round';
+  g.lineJoin = 'round';
+  g.shadowColor = 'rgba(0,0,0,.5)';
+  g.shadowBlur = 5 * s;
+  g.strokeStyle = '#fff';
+  g.lineWidth = 3.4 * s;
+
+  /* body */
+  g.beginPath();
+  g.moveTo(0, shY);
+  g.lineTo(0, hipY);
+  g.stroke();
+
+  /* head */
+  g.beginPath();
+  g.arc(0, headY, headR, 0, Math.PI * 2);
+  g.stroke();
+
+  /* legs */
+  g.beginPath();
+  g.moveTo(0, hipY);
+  g.lineTo(stride * 0.5, hipY + 13 * s);
+  g.lineTo(stride, 0);
+  g.moveTo(0, hipY);
+  g.lineTo(-stride * 0.5, hipY + 13 * s);
+  g.lineTo(-stride, 0);
+  g.stroke();
+
+  /* arms */
+  if (m.state === 'punch'){
+    g.beginPath();
+    g.moveTo(0, shY);
+    g.lineTo(16 * s, shY - 2 * s);
+    g.lineTo(27 * s, shY - 6 * s);
+    g.stroke();
+    g.beginPath();
+    g.moveTo(0, shY);
+    g.lineTo(-9 * s, shY + 13 * s);
+    g.stroke();
+    g.globalAlpha = 0.85;
+    g.lineWidth = 2 * s;
+    g.beginPath();
+    g.moveTo(32 * s, shY - 14 * s); g.lineTo(39 * s, shY - 19 * s);
+    g.moveTo(33 * s, shY - 5 * s);  g.lineTo(41 * s, shY - 5 * s);
+    g.moveTo(32 * s, shY + 4 * s);  g.lineTo(39 * s, shY + 9 * s);
+    g.stroke();
+    g.globalAlpha = 1;
+    g.lineWidth = 3.4 * s;
+  } else if (m.state === 'kick'){
+    g.beginPath();
+    g.moveTo(0, shY); g.lineTo(armSwing * 0.4, shY + 15 * s); g.lineTo(armSwing * 0.8, shY + 12 * s);
+    g.moveTo(0, shY); g.lineTo(-armSwing * 0.4, shY + 15 * s); g.lineTo(-armSwing * 0.9, shY + 10 * s);
+    g.stroke();
+  } else {
+    g.beginPath();
+    g.moveTo(0, shY); g.lineTo(armSwing, shY + 16 * s);
+    g.moveTo(0, shY); g.lineTo(-armSwing, shY + 16 * s);
+    g.stroke();
+  }
+
+  /* eyes */
+  g.shadowBlur = 0;
+  g.fillStyle = '#fff';
+  g.beginPath(); g.arc(3.2 * s, headY - 1.2 * s, 1.15 * s, 0, Math.PI * 2); g.fill();
+  g.beginPath(); g.arc(6.4 * s, headY - 1.2 * s, 1.15 * s, 0, Math.PI * 2); g.fill();
+
+  g.restore();
+
+  /* speech bubble */
+  if (m.sayT > 0 && m.say){
+    const a = Math.min(1, m.sayT * 2);
+    g.save();
+    g.globalAlpha = a;
+    g.font = '700 ' + Math.round(12 * s) + 'px "Segoe UI", system-ui, sans-serif';
+    const w = g.measureText(m.say).width + 16, h = 22 * s;
+    const x = m.x - w / 2, y = m.y - 88 * s;
+    g.fillStyle = 'rgba(255,255,255,.96)';
+    g.beginPath();
+    if (typeof g.roundRect === 'function') g.roundRect(x, y, w, h, 8 * s);
+    else g.rect(x, y, w, h);
+    g.fill();
+    g.beginPath();
+    g.moveTo(m.x - 6, y + h - 1);
+    g.lineTo(m.x + 2, y + h + 7);
+    g.lineTo(m.x + 7, y + h - 1);
+    g.closePath();
+    g.fill();
+    g.fillStyle = '#14161c';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText(m.say, m.x, y + h / 2 + 0.5);
+    g.restore();
+  }
+}
+
+function chaosStop(){
+  chaosRampageUntil = 0;
+  chaosMen = [];
+  chaosParts = [];
+  if (chaosRaf){ cancelAnimationFrame(chaosRaf); chaosRaf = 0; }
+  if (chaosCanvas){
+    window.removeEventListener('resize', chaosResize);
+    chaosCanvas.remove();
+    chaosCanvas = null;
+    chaosCtx = null;
+  }
+  document.querySelectorAll('.chaos-hit, .chaos-kick, .chaos-quake').forEach(n => {
+    n.classList.remove('chaos-hit', 'chaos-kick', 'chaos-quake');
+    n.style.removeProperty('--kx');
+    n.style.removeProperty('--ky');
+  });
+  document.querySelectorAll('.chaos-crack').forEach(n => n.remove());
+}
+
+/* -------------------------------- the app --------------------------- */
+APPS.stixman = {
+  name: 'Stixman', icon: '\u00af\\_(\u30c4)_/\u00af', w: 400, h: 430, single: true,
+  mount(body, win){
+    body.innerHTML =
+      '<div class="stix">' +
+        '<div class="stix-art">' + iconHTML('stixman', 'X') + '</div>' +
+        '<h3>Stixman is loose</h3>' +
+        '<p>He sprints across the desktop, boots icons into the air, punches windows until they crack, ' +
+        'throws rocks and stomps the screen. Nothing is really broken — every mark fades and every ' +
+        'wobble stops the moment you put him away.</p>' +
+        '<div class="stix-row">' +
+          '<button class="btn primary" id="stixAdd">Add one</button>' +
+          '<button class="btn" id="stixRampage">Rampage</button>' +
+          '<button class="btn" id="stixStop">Put him away</button>' +
+        '</div>' +
+        '<div class="stix-stats"><span>stickmen <b id="stixCount">0</b></span>' +
+        '<span>bonks <b id="stixHits">0</b></span></div>' +
+      '</div>';
+
+    const countEl = $('#stixCount', body), hitsEl = $('#stixHits', body);
+    const paint = () => {
+      if (countEl) countEl.textContent = String(chaosMen.length);
+      if (hitsEl) hitsEl.textContent = String(chaosHits);
+    };
+    $('#stixAdd', body).onclick = () => {
+      const added = chaosSpawn(1);
+      if (!added) toast('Stixman', 'He is already running around');
+      paint();
+    };
+    $('#stixRampage', body).onclick = () => {
+      chaosSpawn(4);
+      chaosRampageUntil = Date.now() + 6000;
+      chaosQuake();
+      toast('Stixman', 'RAMPAGE — everything is wobbling');
+      paint();
+    };
+    $('#stixStop', body).onclick = () => { chaosStop(); paint(); toast('Stixman', 'Desktop tidied up'); };
+
+    chaosSpawn(1);
+    const tick = setInterval(paint, 400);
+
+    /* createWindow takes the return value as the window's cleanup, so hand it
+       back rather than assigning win.cleanup (that gets overwritten) */
+    return () => {
+      clearInterval(tick);
+      chaosStop();
+    };
+  }
+};
 
 /* ---------------------------- Alt+Tab switcher ---------------------- */
 let __alt = null;
@@ -8231,7 +8779,7 @@ APPS.flashcards = {
 /* =====================================================================
    DESKTOP ICONS + START MENU
    ===================================================================== */
-const DESKTOP_ICONS = ['trash','browser','youtube','spotify','files','arcade','ai','terminal','settings','about'];
+const DESKTOP_ICONS = ['trash','browser','youtube','spotify','files','arcade','stixman','ai','terminal','settings','about'];
 
 /* Desktop shortcuts are only *shown* from this list — removing one never
    uninstalls the app, it just takes the icon off the desktop. Apps stay in
