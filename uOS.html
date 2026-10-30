@@ -282,6 +282,30 @@ table.sheet td.sel{outline:2px solid var(--accent);outline-offset:-2px;backgroun
 .prof-tile .nm{font-size:12.5px;font-weight:600;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .prof-tile .badge{font-size:10px;color:var(--accent)}
 .prof-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;border-top:1px solid var(--border);padding-top:12px}
+/* ---- sign in ---- */
+#signin{position:fixed;inset:0;z-index:3000;display:none;align-items:center;justify-content:center;padding:22px;
+  background:radial-gradient(circle at 50% 12%,#1b2440,#070a11 72%)}
+#signin.open{display:flex}
+.si-box{width:100%;max-width:430px;display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center;color:#e9eefb}
+.si-brand{font-size:32px;font-weight:800;letter-spacing:-.6px;margin-top:6px}
+.si-brand span{color:#8fb7ff}
+.si-title{font-size:13px;color:#9fb0c9;margin-top:-8px}
+.si-msg{min-height:17px;font-size:12px;color:#ff9b9b}
+.si-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+.si-foot{font-size:10.5px;color:#6d7b93;line-height:1.5;max-width:330px}
+.si-list{display:flex;gap:14px;flex-wrap:wrap;justify-content:center}
+.si-tile{display:flex;flex-direction:column;align-items:center;gap:7px;padding:12px 10px;border-radius:12px;background:rgba(255,255,255,.05);border:1px solid transparent;min-width:104px}
+.si-tile:hover{background:rgba(255,255,255,.1);border-color:#8fb7ff}
+.si-ava{width:74px;height:74px;border-radius:50%;display:grid;place-items:center;font-size:36px;background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.14)}
+.si-name{font-size:13.5px;font-weight:600;color:#fff;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.si-sub{font-size:10px;color:#7f8ca3}
+.si-who{display:flex;flex-direction:column;align-items:center;gap:7px}
+.si-pass{display:flex;gap:8px;width:100%;max-width:330px}
+.si-pass .field,#signin .field{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.16);color:#fff}
+.si-pass .field:focus,#signin .field:focus{border-color:#8fb7ff;box-shadow:0 0 0 2px rgba(143,183,255,.22)}
+.si-remember{display:flex;align-items:center;gap:7px;font-size:12px;color:#9fb0c9}
+.si-form{display:flex;flex-direction:column;gap:8px;width:100%;max-width:330px}
+.si-empty{font-size:12px;color:#9fb0c9;max-width:300px;line-height:1.55}
 .qa{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .qa button{background:var(--field);border:1px solid var(--border);border-radius:6px;padding:11px 8px;display:flex;flex-direction:column;align-items:center;gap:7px;font-size:11px;color:var(--text)}
 .qa button:hover{background:var(--field-hover)}
@@ -920,8 +944,23 @@ body.cursor-lg,body.cursor-lg *{
     <div class="prof-grid" id="profList"></div>
     <div class="prof-foot">
       <span class="muted" style="font-size:11.5px">Each profile keeps its own files, settings, desktop and games.</span>
-      <button class="btn" id="profClose">Cancel</button>
+      <span style="display:flex;gap:8px">
+        <button class="btn" id="profSignOut">Sign out</button>
+        <button class="btn" id="profClose">Cancel</button>
+      </span>
     </div>
+  </div>
+</div>
+
+<!-- ================= SIGN IN ================= -->
+<div id="signin">
+  <div class="si-box">
+    <div class="si-brand">u<span>OS</span></div>
+    <div class="si-title" id="siTitle">Sign in</div>
+    <div id="siBody"></div>
+    <div class="si-msg" id="siMsg"></div>
+    <div class="si-actions" id="siActions"></div>
+    <div class="si-foot">Accounts live only in this browser — see Settings → Users.</div>
   </div>
 </div>
 
@@ -1045,17 +1084,21 @@ function migrateProfiles(){
       legacy.push(k);
     }
   } catch(e){}
-  if (!legacy.length) return;
   try {
-    if (localStorage.getItem(PROFILES_KEY)) return;           // profiles already set up
-    const id = 'default';
+    if (localStorage.getItem(PROFILES_KEY)) return;          // already set up
+    /* A brand-new install still needs one account record for the person using
+       it, otherwise the profile picker and Settings > Users have nothing. */
+    const id = localStorage.getItem(ACTIVE_KEY) || 'default';
     localStorage.setItem(PROFILES_KEY, JSON.stringify([{ id: id, name: 'Me', avatar: '🧑' }]));
-    localStorage.setItem(ACTIVE_KEY, id);
-    legacy.forEach(k => {
-      const v = localStorage.getItem(k);
-      if (v != null) localStorage.setItem('uos.' + id + '.' + k.replace(/^uos\./, ''), v);
-    });
-    __prefix = 'uos.' + id + '.';
+    if (!localStorage.getItem(ACTIVE_KEY)) localStorage.setItem(ACTIVE_KEY, id);
+    /* Older builds stored everything as uos.<key>: copy it into this profile. */
+    if (legacy.length){
+      legacy.forEach(k => {
+        const v = localStorage.getItem(k);
+        if (v != null) localStorage.setItem('uos.' + id + '.' + k.replace(/^uos\./, ''), v);
+      });
+      __prefix = 'uos.' + id + '.';
+    }
   } catch(e){}
 }
 migrateProfiles();
@@ -2678,6 +2721,44 @@ APPS.settings = {
             row('Name', nameIn, 'Shown on the Start menu and lock screen'),
             row('Picture', avIn, 'Any emoji, or blank for your initial'),
             note('Files, settings, desktop, games and chips are kept separately for each profile.')
+          ),
+          head('Sign-in'),
+          card(
+            row('Password', btnRow((() => {
+              const list = profilesGet(), rec = list.find(x => x.id === p.id), has = !!(rec && rec.hash);
+              const set = async () => {
+                const a = prompt(has ? 'New password:' : 'Choose a password (at least 4 characters):', '');
+                if (a === null) return;
+                if (a.length < 4) return toast('Accounts', 'Use at least 4 characters');
+                const b = prompt('Repeat the password:', '');
+                if (b === null) return;
+                if (a !== b) return toast('Accounts', 'The passwords do not match');
+                const salt = hexRandom(16);
+                const hash = await hashPassword(a, salt);
+                const l2 = profilesGet(), r2 = l2.find(x => x.id === p.id);
+                if (!r2) return;
+                r2.salt = salt; r2.hash = hash; profilesSet(l2);
+                toast('Accounts', 'Password set');
+                render();
+              };
+              const rm = () => {
+                if (!confirm('Remove the password for "' + p.name + '"?\n\nThe sign-in screen will stop asking for it.')) return;
+                const l2 = profilesGet(), r2 = l2.find(x => x.id === p.id);
+                if (!r2) return;
+                delete r2.hash; delete r2.salt; profilesSet(l2);
+                toast('Accounts', 'Password removed');
+                render();
+              };
+              return [
+                el('button', { class: 'btn' + (has ? '' : ' primary'), onclick: set }, has ? 'Change password' : 'Set a password'),
+                has ? el('button', { class: 'btn danger', onclick: rm }, 'Remove') : null
+              ];
+            })()), 'Sign in with ' + p.name + ' when uOS starts'),
+            row('Startup', btnRow(
+              el('button', { class: 'btn', onclick: () => { sessionSet(null); toast('Accounts', 'The sign-in screen will show on next start'); setTimeout(() => location.reload(), 400); } }, 'Require sign-in'),
+              el('button', { class: 'btn', onclick: () => { sessionSet({ skipped: true }); toast('Accounts', 'This device will skip the sign-in screen'); } }, 'Skip on this device'))),
+            row('Session', btnRow(el('button', { class: 'btn danger', onclick: () => signOut() }, 'Sign out'))),
+            note('The password locks the sign-in screen, not the stored data — anyone who can read this browser can read its storage.')
           ),
           head('Profiles on this browser'),
           card(
@@ -9108,8 +9189,166 @@ function renderProfiles(){
 }
 function showProfiles(){ renderProfiles(); $('#profiles').classList.add('open'); }
 function hideProfiles(){ $('#profiles').classList.remove('open'); }
+
+/* =====================================================================
+   ACCOUNTS + SIGN-IN
+   An account is just a profile with an optional password. Only a salted
+   PBKDF2 hash is kept; the password gates this sign-in screen. It is NOT
+   disk encryption — anyone who can read this browser's storage can read the
+   data — so treat it as a lock on the front door, not a vault.
+   "Remember this device" keeps you signed in; Skip uses the current account
+   without asking again until you sign out.
+   ===================================================================== */
+const SESSION_KEY = 'uos.__session';
+function sessionGet(){ try { return JSON.parse(localStorage.getItem(SESSION_KEY)) || null; } catch(e){ return null; } }
+function sessionSet(v){ try { if (v) localStorage.setItem(SESSION_KEY, JSON.stringify(v)); else localStorage.removeItem(SESSION_KEY); } catch(e){} }
+function hexRandom(bytes){
+  const b = new Uint8Array(bytes);
+  try { crypto.getRandomValues(b); } catch(e){ for (let i = 0; i < bytes; i++) b[i] = Math.floor(Math.random() * 256); }
+  return [...b].map(x => x.toString(16).padStart(2, '0')).join('');
+}
+async function hashPassword(password, saltHex){
+  const enc = new TextEncoder();
+  try {
+    const salt = Uint8Array.from((String(saltHex).match(/.{1,2}/g) || []).map(h => parseInt(h, 16)));
+    const key = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveBits']);
+    const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt: salt, iterations: 120000, hash: 'SHA-256' }, key, 256);
+    return 'pbkdf2:' + [...new Uint8Array(bits)].map(b => b.toString(16).padStart(2, '0')).join('');
+  } catch(e){
+    try {
+      let h = enc.encode(password + '|' + saltHex);
+      for (let i = 0; i < 2000; i++) h = new Uint8Array(await crypto.subtle.digest('SHA-256', h));
+      return 'sha:' + [...h].map(b => b.toString(16).padStart(2, '0')).join('');
+    } catch(e2){
+      let s = password + '|' + saltHex, hash = 5381;
+      for (let i = 0; i < s.length; i++) hash = ((hash << 5) + hash + s.charCodeAt(i)) | 0;
+      return 'weak:' + (hash >>> 0).toString(16);
+    }
+  }
+}
+const accountById = id => profilesGet().find(p => p && p.id === id) || null;
+const protectedAccounts = () => profilesGet().filter(p => p && p.hash);
+/* is a sign-in needed before the desktop? */
+function gateIsNeeded(){
+  const prot = protectedAccounts();
+  if (!prot.length) return false;                       // nothing protected yet
+  const s = sessionGet();
+  if (!s) return true;
+  if (s.once){ sessionSet(null); return false; }        // "don't remember" was used
+  if (s.skipped) return false;
+  return !prot.some(a => a.id === s.id);
+}
+function signInAs(id, remember){
+  try { localStorage.setItem(ACTIVE_KEY, id); } catch(e){}
+  sessionSet(remember ? { id: id } : { id: id, once: true });
+  location.reload();
+}
+function signOut(){
+  sessionSet(null);
+  toast('Accounts', 'Signed out');
+  location.reload();
+}
+function skipSignIn(){
+  sessionSet({ skipped: true });
+  hideSignIn();
+}
+
+let siState = { mode: 'pick', id: null };
+function siBtn(label, cls, fn){
+  return el('button', { class: 'btn' + (cls ? ' ' + cls : ''), onclick: fn }, label);
+}
+function renderSignIn(){
+  const bodyEl = $('#siBody'), actions = $('#siActions'), title = $('#siTitle'), msg = $('#siMsg');
+  bodyEl.innerHTML = ''; actions.innerHTML = ''; msg.textContent = '';
+  const accounts = profilesGet();
+
+  if (siState.mode === 'pick'){
+    title.textContent = 'Who is signing in?';
+    const list = el('div', { class: 'si-list' });
+    accounts.forEach(p => {
+      const t = el('button', { class: 'si-tile' },
+        el('span', { class: 'si-ava' }, p.avatar || '🧑'),
+        el('span', { class: 'si-name' }, p.name),
+        el('span', { class: 'si-sub' }, p.hash ? 'password' : 'no password'));
+      t.onclick = () => {
+        if (p.id === store.profileId() && !p.hash){ hideSignIn(); return; }
+        if (p.hash){ siState = { mode: 'pass', id: p.id }; renderSignIn(); }
+        else signInAs(p.id, true);
+      };
+      list.append(t);
+    });
+    if (!accounts.length) list.append(el('div', { class: 'si-empty' },
+      'No accounts yet. Create one, or skip and add one later in Settings → Users.'));
+    bodyEl.append(list);
+    actions.append(siBtn('Create an account', 'primary', () => { siState = { mode: 'create' }; renderSignIn(); }));
+    actions.append(siBtn('Skip for now', '', skipSignIn));
+    return;
+  }
+
+  if (siState.mode === 'pass'){
+    const p = accountById(siState.id);
+    if (!p){ siState = { mode: 'pick' }; return renderSignIn(); }
+    title.textContent = 'Sign in';
+    bodyEl.append(el('div', { class: 'si-who' },
+      el('span', { class: 'si-ava' }, p.avatar || '🧑'),
+      el('span', { class: 'si-name' }, p.name)));
+    const pass = el('input', { class: 'field', type: 'password', placeholder: 'Password', autocomplete: 'current-password' });
+    const remember = el('input', { type: 'checkbox' });
+    remember.checked = true;
+    const submit = async () => {
+      msg.textContent = '';
+      const hash = await hashPassword(pass.value, p.salt || '');
+      if (hash !== p.hash){ msg.textContent = 'That password does not match.'; pass.value = ''; pass.focus(); return; }
+      signInAs(p.id, remember.checked);
+    };
+    pass.addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); submit(); } });
+    bodyEl.append(
+      el('div', { class: 'si-pass' }, pass, el('button', { class: 'btn primary', onclick: submit }, 'Sign in')),
+      el('label', { class: 'si-remember' }, remember, el('span', {}, 'Remember this device')));
+    setTimeout(() => pass.focus(), 40);
+    actions.append(siBtn('Use another account', '', () => { siState = { mode: 'pick' }; renderSignIn(); }));
+    actions.append(siBtn('Skip for now', '', skipSignIn));
+    return;
+  }
+
+  title.textContent = 'Create an account';
+  const name = el('input', { class: 'field', placeholder: 'Your name' });
+  const pass = el('input', { class: 'field', type: 'password', placeholder: 'Password (at least 4 characters)' });
+  const pass2 = el('input', { class: 'field', type: 'password', placeholder: 'Repeat the password' });
+  const emoji = el('input', { class: 'field', placeholder: 'Avatar emoji (optional)', maxlength: '4' });
+  bodyEl.append(el('div', { class: 'si-form' }, name, pass, pass2, emoji));
+  const submit = async () => {
+    msg.textContent = '';
+    const nm = name.value.trim().slice(0, 24);
+    if (!nm) return void (msg.textContent = 'Give the account a name.');
+    if (pass.value.length < 4) return void (msg.textContent = 'Use at least 4 characters for the password.');
+    if (pass.value !== pass2.value) return void (msg.textContent = 'The two passwords do not match.');
+    if (profilesGet().some(p => p.name.toLowerCase() === nm.toLowerCase())) return void (msg.textContent = 'That name is already taken.');
+    const salt = hexRandom(16);
+    const hash = await hashPassword(pass.value, salt);
+    const id = addProfile(nm, Array.from((emoji.value || '').trim()).slice(0, 2).join('') || '🧑');
+    const list = profilesGet();
+    const rec = list.find(p => p.id === id);
+    if (rec){ rec.salt = salt; rec.hash = hash; profilesSet(list); }
+    signInAs(id, true);
+  };
+  name.addEventListener('keydown', e => { if (e.key === 'Enter') pass.focus(); });
+  pass.addEventListener('keydown', e => { if (e.key === 'Enter') pass2.focus(); });
+  pass2.addEventListener('keydown', e => { if (e.key === 'Enter') submit(); });
+  setTimeout(() => name.focus(), 40);
+  actions.append(siBtn('Create account', 'primary', submit));
+  actions.append(siBtn('Cancel', '', () => { siState = { mode: 'pick' }; renderSignIn(); }));
+}
+function hideSignIn(){ $('#signin').classList.remove('open'); }
+function initSignIn(){
+  if (!gateIsNeeded()) return;
+  siState = { mode: 'pick' };
+  renderSignIn();
+  $('#signin').classList.add('open');
+}
 $('.sm-user').onclick = () => { toggleStart(false); showProfiles(); };
 $('#profClose').onclick = hideProfiles;
+$('#profSignOut').onclick = () => { hideProfiles(); signOut(); };
 $('#profiles').addEventListener('click', e => { if (e.target && e.target.id === 'profiles') hideProfiles(); });
 
 /* global shortcuts */
@@ -9416,6 +9655,7 @@ boot();
 maybeAutoCheck();
 storageCheck();
 restoreSession();
+initSignIn();
 console.log('%cuOS ' + UOS_VERSION + '%c — web operating system loaded. Apps: ' + Object.keys(APPS).length,
   'font-weight:bold;color:#0078d4;font-size:14px', 'color:#888');
 </script>

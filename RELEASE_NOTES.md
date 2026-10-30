@@ -7,6 +7,11 @@ dependencies, no installs, no accounts — just open it.
 
 ## New in 3.2
 
+- **Accounts and sign-in** — create an account (name, avatar, password) and sign in at
+  startup, tick **Remember this device**, or **Skip for now**. Passwords are salted
+  PBKDF2 hashes kept locally, and each account is a separate profile with its own files,
+  settings and games. Settings → Users can set/change/remove the password, require sign-in
+  again, or sign out. It locks the sign-in screen — not the stored data.
 - **Session restore + window memory** — reopen uOS and your apps come back, each where
   and how big you left it (maximised state included). Toggle in Settings → Windows.
 - **Command palette** — **Ctrl+K** searches apps, files, settings sections and commands.
